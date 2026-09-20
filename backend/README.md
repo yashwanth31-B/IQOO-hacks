@@ -18,19 +18,25 @@ backend/
 ├── src/
 │   ├── controllers/            # Request handlers and response formatting
 │   │   ├── auth.controller.js  # Signup, login, and profile handlers
-│   │   └── health.controller.js # Health check endpoint handler (with DB status)
+│   │   ├── game.controller.js  # Game catalog handlers
+│   │   ├── health.controller.js # Health check endpoint handler (with DB status)
+│   │   └── session.controller.js # Gaming session lifecycle handlers
 │   ├── routes/                 # API route definitions
 │   │   ├── auth.routes.js      # Authentication endpoints (/api/auth)
+│   │   ├── game.routes.js      # Game endpoints (/api/games)
 │   │   ├── health.routes.js    # Health check route
-│   │   └── index.js            # Central route aggregator (/api)
+│   │   ├── index.js            # Central route aggregator (/api)
+│   │   └── session.routes.js   # Gaming session endpoints (/api/sessions)
 │   ├── middleware/             # Express middlewares
 │   │   ├── auth.middleware.js  # JWT Bearer token authentication middleware
 │   │   └── error.middleware.js # Centralized error & 404 handlers
 │   ├── services/               # Business logic & data operations
-│   │   └── auth.service.js     # User registration, password hashing, verification
+│   │   ├── auth.service.js     # User registration, password hashing, verification
+│   │   ├── game.service.js     # Game creation and catalog queries
+│   │   └── session.service.js  # Session creation, duration calculation, ownership enforcement
 │   ├── utils/                  # Reusable utility functions
 │   │   ├── jwt.utils.js        # JWT signing & verification helpers
-│   │   └── validation.utils.js # Email & password validation utilities
+│   │   └── validation.utils.js # Email, UUID, game, session, and pagination validation
 │   ├── db/                     # PostgreSQL database layer
 │   │   ├── migrations/         # Plain SQL migration files
 │   │   │   └── 001_initial_schema.sql
@@ -39,7 +45,8 @@ backend/
 │   │   ├── migrate.js          # Migration runner (tracks applied in schema_migrations)
 │   │   └── verify-schema.js    # Schema inspection utility
 │   ├── tests/                  # Automated test suites
-│   │   └── auth.test.js        # Full authentication & health test suite (15 tests)
+│   │   ├── auth.test.js        # Authentication & health test suite (15 tests)
+│   │   └── session.test.js     # Gaming session & games test suite (20 tests)
 │   └── server.js               # Express application entry point & server bootstrap
 ├── .env.example                # Template for environment variables
 ├── .gitignore                  # Backend-specific ignore rules
@@ -67,7 +74,7 @@ cp .env.example .env
 
 - **`npm run dev`**: Starts the development server with hot reload via `nodemon`.
 - **`npm start`**: Runs the server in production mode using standard `node`.
-- **`npm test`**: Runs the automated authentication test suite (15 assertions).
+- **`npm test`**: Runs the full automated test suite (35 assertions across auth and session suites).
 - **`npm run db:check`**: Tests connectivity to the PostgreSQL database.
 - **`npm run db:migrate`**: Executes pending SQL migrations in `src/db/migrations/` sequentially.
 
@@ -80,13 +87,16 @@ cp .env.example .env
 - **`tasks`**: Post-session transition tasks (`id` [UUID PK], `user_id` [FK users], `title`, `description`, `priority`, `due_date`, `estimated_minutes`, `completed`, timestamps).
 - **`schema_migrations`**: Tracks applied migrations idempotently (`id`, `name`, `applied_at`).
 
+---
+
 ## 📡 API Endpoints
 
-### Authentication
+### 1. Authentication (`/api/auth`)
 
 #### Register User
-- **Endpoint**: `POST /api/auth/signup`
-- **Body**:
+- **Method / Path**: `POST /api/auth/signup`
+- **Auth Required**: No
+- **Request Body**:
   ```json
   {
     "name": "Lokesh",
@@ -108,8 +118,9 @@ cp .env.example .env
   ```
 
 #### Login
-- **Endpoint**: `POST /api/auth/login`
-- **Body**:
+- **Method / Path**: `POST /api/auth/login`
+- **Auth Required**: No
+- **Request Body**:
   ```json
   {
     "email": "lokesh@example.com",
@@ -121,7 +132,7 @@ cp .env.example .env
   {
     "success": true,
     "message": "Login successful",
-    "token": "eyJhbGciOi...",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "user": {
       "id": "f4af628d-4fd5-4bf8-8ca9-48611bb77cfa",
       "name": "Lokesh",
@@ -130,9 +141,9 @@ cp .env.example .env
   }
   ```
 
-#### Current User Profile (Protected)
-- **Endpoint**: `GET /api/auth/me`
-- **Header**: `Authorization: Bearer <token>`
+#### Current User Profile
+- **Method / Path**: `GET /api/auth/me`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
 - **Response (200 OK)**:
   ```json
   {
@@ -145,10 +156,262 @@ cp .env.example .env
   }
   ```
 
-### System Health
+---
 
-- **Endpoint**: `GET /api/health`
-- **Description**: Verifies backend availability and PostgreSQL database connectivity.
+### 2. Games Catalog (`/api/games`)
+
+#### Create Game
+- **Method / Path**: `POST /api/games`
+- **Auth Required**: No
+- **Request Body**:
+  ```json
+  {
+    "name": "Valorant",
+    "platform": "PC"
+  }
+  ```
+- **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Game created successfully",
+    "game": {
+      "id": "3d05f33f-d632-4acd-8671-9beb611549ab",
+      "name": "Valorant",
+      "platform": "PC",
+      "createdAt": "2026-09-20T17:22:50.838Z"
+    }
+  }
+  ```
+
+#### Get All Games
+- **Method / Path**: `GET /api/games`
+- **Auth Required**: No
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "games": [
+      {
+        "id": "3d05f33f-d632-4acd-8671-9beb611549ab",
+        "name": "Valorant",
+        "platform": "PC",
+        "createdAt": "2026-09-20T17:22:50.838Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+### 3. Gaming Sessions (`/api/sessions`)
+
+> 🔒 **Security Notice**: All session endpoints require a valid JWT via the header `Authorization: Bearer <token>`. Session ownership is strictly enforced: users can only view, update, end, or delete their own sessions. Accessing another user's session returns `404 Not Found`.
+
+#### Start Gaming Session
+- **Method / Path**: `POST /api/sessions`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Request Body**:
+  ```json
+  {
+    "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+    "score": 1200,
+    "performance": "Good",
+    "notes": "Strong first half"
+  }
+  ```
+- **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Gaming session started successfully",
+    "session": {
+      "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+      "gameName": "Valorant",
+      "platform": "PC",
+      "startedAt": "2026-09-20T17:22:50.857Z",
+      "endedAt": null,
+      "duration": null,
+      "score": 1200,
+      "performance": "Good",
+      "notes": "Strong first half",
+      "createdAt": "2026-09-20T17:22:50.857Z",
+      "updatedAt": "2026-09-20T17:22:50.857Z"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `201 Created`: Session started successfully.
+  - `400 Bad Request`: Invalid `gameId` UUID format or input validation error.
+  - `404 Not Found`: Referenced `gameId` does not exist in the database.
+  - `409 Conflict`: User already has an active session (`"An active gaming session already exists"`).
+
+#### Get Active Session
+- **Method / Path**: `GET /api/sessions/active`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK - Active Session Found)**:
+  ```json
+  {
+    "success": true,
+    "session": {
+      "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+      "gameName": "Valorant",
+      "platform": "PC",
+      "startedAt": "2026-09-20T17:22:50.857Z",
+      "endedAt": null,
+      "duration": null,
+      "score": 1200,
+      "performance": "Good",
+      "notes": "Strong first half",
+      "createdAt": "2026-09-20T17:22:50.857Z",
+      "updatedAt": "2026-09-20T17:22:50.857Z"
+    }
+  }
+  ```
+- **Response (200 OK - No Active Session)**:
+  ```json
+  {
+    "success": true,
+    "session": null
+  }
+  ```
+
+#### Get User Sessions (Paginated)
+- **Method / Path**: `GET /api/sessions?page=1&limit=20`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "sessions": [
+      {
+        "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+        "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+        "gameName": "Valorant",
+        "platform": "PC",
+        "startedAt": "2026-09-20T17:22:50.857Z",
+        "endedAt": "2026-09-20T17:22:51.897Z",
+        "duration": 1,
+        "score": 1550,
+        "performance": "Excellent",
+        "notes": "Clutched round 24",
+        "createdAt": "2026-09-20T17:22:50.857Z",
+        "updatedAt": "2026-09-20T17:22:51.897Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+  ```
+
+#### Get Single Session
+- **Method / Path**: `GET /api/sessions/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "session": {
+      "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+      "gameName": "Valorant",
+      "platform": "PC",
+      "startedAt": "2026-09-20T17:22:50.857Z",
+      "endedAt": null,
+      "duration": null,
+      "score": 1200,
+      "performance": "Good",
+      "notes": "Strong first half"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Found and returned.
+  - `400 Bad Request`: Invalid UUID format.
+  - `404 Not Found`: Session does not exist or belongs to another user.
+
+#### Update Session
+- **Method / Path**: `PATCH /api/sessions/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Request Body** *(at least one field)*:
+  ```json
+  {
+    "score": 1550,
+    "performance": "Excellent",
+    "notes": "Clutched round 24"
+  }
+  ```
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Gaming session updated successfully",
+    "session": {
+      "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "score": 1550,
+      "performance": "Excellent",
+      "notes": "Clutched round 24",
+      "updatedAt": "2026-09-20T17:22:50.871Z"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Updated successfully.
+  - `400 Bad Request`: Invalid UUID or attempting to modify restricted fields (`userId`, `gameId`, etc.).
+  - `404 Not Found`: Session does not exist or belongs to another user.
+
+#### End Gaming Session
+- **Method / Path**: `POST /api/sessions/:id/end`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Gaming session ended successfully",
+    "session": {
+      "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "startedAt": "2026-09-20T17:22:50.857Z",
+      "endedAt": "2026-09-20T17:22:51.897Z",
+      "duration": 1,
+      "score": 1550,
+      "performance": "Excellent",
+      "notes": "Clutched round 24"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Ended successfully with PostgreSQL-calculated duration in seconds.
+  - `400 Bad Request`: Invalid UUID format.
+  - `404 Not Found`: Session does not exist or belongs to another user.
+  - `409 Conflict`: Session has already been ended.
+
+#### Delete Gaming Session
+- **Method / Path**: `DELETE /api/sessions/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Gaming session deleted successfully"
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Deleted successfully.
+  - `400 Bad Request`: Invalid UUID format.
+  - `404 Not Found`: Session does not exist or belongs to another user.
+
+---
+
+### 4. System Health (`/api/health`)
+
+- **Method / Path**: `GET /api/health`
+- **Auth Required**: No
 - **Response (200 OK)**:
   ```json
   {
