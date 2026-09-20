@@ -1,10 +1,15 @@
+const { testConnection } = require('../db');
+
 /**
  * Health check controller
  */
-const getHealth = (req, res) => {
+const getHealth = async (req, res) => {
+  const isDbConnected = await testConnection();
+
   res.status(200).json({
     success: true,
-    message: 'AI Gaming Copilot API is running'
+    message: 'AI Gaming Copilot API is running',
+    database: isDbConnected ? 'connected' : 'disconnected'
   });
 };
 
