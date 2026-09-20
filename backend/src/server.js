@@ -33,7 +33,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-if (process.env.NODE_ENV !== 'test') {
+if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`AI Gaming Copilot Backend running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
     console.log(`Health check available at: http://localhost:${PORT}/api/health`);

@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "db:migrate": "node src/db/migrate.js",
-    "db:check": "node src/db/check-connection.js"
+    "db:check": "node src/db/check-connection.js",
+    "test": "node src/tests/auth.test.js"
   },
   "keywords": [
     "ai-gaming-copilot",
@@ -17,9 +18,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0"
   },
   "devDependencies": {
