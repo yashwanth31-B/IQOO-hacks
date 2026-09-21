@@ -1,10 +1,11 @@
 /**
- * Validation utilities for authentication, games, gaming sessions, and memories
+ * Validation utilities for authentication, games, gaming sessions, memories, and tasks
  */
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN_PASSWORD_LENGTH = 6;
+const ALLOWED_PRIORITIES = ['low', 'medium', 'high'];
 
 /**
  * Validate email format
@@ -45,6 +46,17 @@ const isValidMetadata = (metadata) => {
     return false;
   }
   return true;
+};
+
+/**
+ * Validate date format (ISO 8601 or parseable date string)
+ * @param {*} dateVal 
+ * @returns {boolean}
+ */
+const isValidDate = (dateVal) => {
+  if (typeof dateVal !== 'string' || dateVal.trim().length === 0) return false;
+  const parsed = Date.parse(dateVal);
+  return !isNaN(parsed);
 };
 
 /**
@@ -342,6 +354,127 @@ const validateUpdateMemoryInput = (body) => {
 };
 
 /**
+ * Validate task creation payload
+ * @param {Object} param0 
+ * @returns {{ isValid: boolean, error?: string }}
+ */
+const validateCreateTaskInput = ({ title, description, priority, dueDate, estimatedMinutes }) => {
+  if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    return { isValid: false, error: 'Title is required' };
+  }
+
+  if (title.trim().length > 255) {
+    return { isValid: false, error: 'Title must not exceed 255 characters' };
+  }
+
+  if (description !== undefined && description !== null) {
+    if (typeof description !== 'string') {
+      return { isValid: false, error: 'Description must be a string' };
+    }
+  }
+
+  if (priority !== undefined && priority !== null) {
+    if (typeof priority !== 'string' || !ALLOWED_PRIORITIES.includes(priority.trim().toLowerCase())) {
+      return { isValid: false, error: "Priority must be one of: 'low', 'medium', 'high'" };
+    }
+  }
+
+  if (dueDate !== undefined && dueDate !== null) {
+    if (!isValidDate(dueDate)) {
+      return { isValid: false, error: 'Invalid due date format: must be a valid ISO date string' };
+    }
+  }
+
+  if (estimatedMinutes !== undefined && estimatedMinutes !== null) {
+    const mins = Number(estimatedMinutes);
+    if (!Number.isInteger(mins) || mins <= 0) {
+      return { isValid: false, error: 'Estimated minutes must be a positive integer greater than 0' };
+    }
+  }
+
+  return { isValid: true };
+};
+
+/**
+ * Validate task update payload
+ * @param {Object} body 
+ * @returns {{ isValid: boolean, error?: string }}
+ */
+const validateUpdateTaskInput = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { isValid: false, error: 'Request body must be an object' };
+  }
+
+  const disallowedFields = [
+    'id', 'userId', 'user_id', 'createdAt', 'created_at', 'updatedAt', 'updated_at'
+  ];
+
+  for (const field of disallowedFields) {
+    if (body[field] !== undefined) {
+      return { isValid: false, error: `Field '${field}' cannot be modified` };
+    }
+  }
+
+  const { title, description, priority, dueDate, estimatedMinutes, completed } = body;
+
+  if (
+    title === undefined &&
+    description === undefined &&
+    priority === undefined &&
+    dueDate === undefined &&
+    estimatedMinutes === undefined &&
+    completed === undefined
+  ) {
+    return {
+      isValid: false,
+      error: 'At least one field (title, description, priority, dueDate, estimatedMinutes, completed) must be provided for update'
+    };
+  }
+
+  if (title !== undefined) {
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return { isValid: false, error: 'Title cannot be empty' };
+    }
+    if (title.trim().length > 255) {
+      return { isValid: false, error: 'Title must not exceed 255 characters' };
+    }
+  }
+
+  if (description !== undefined && description !== null) {
+    if (typeof description !== 'string') {
+      return { isValid: false, error: 'Description must be a string' };
+    }
+  }
+
+  if (priority !== undefined && priority !== null) {
+    if (typeof priority !== 'string' || !ALLOWED_PRIORITIES.includes(priority.trim().toLowerCase())) {
+      return { isValid: false, error: "Priority must be one of: 'low', 'medium', 'high'" };
+    }
+  }
+
+  if (dueDate !== undefined && dueDate !== null) {
+    if (!isValidDate(dueDate)) {
+      return { isValid: false, error: 'Invalid due date format: must be a valid ISO date string' };
+    }
+  }
+
+  if (estimatedMinutes !== undefined && estimatedMinutes !== null) {
+    const mins = Number(estimatedMinutes);
+    if (!Number.isInteger(mins) || mins <= 0) {
+      return { isValid: false, error: 'Estimated minutes must be a positive integer greater than 0' };
+    }
+  }
+
+  if (completed !== undefined) {
+    if (typeof completed !== 'boolean') {
+      return { isValid: false, error: 'Completed must be a boolean value' };
+    }
+  }
+
+  return { isValid: true };
+};
+
+/**
  * Validate pagination parameters
  * @param {Object} query 
  * @returns {{ isValid: boolean, page: number, limit: number, error?: string }}
@@ -369,11 +502,53 @@ const validatePagination = (query = {}) => {
   return { isValid: true, page, limit };
 };
 
+/**
+ * Validate task filter query parameters (pagination + completed + priority)
+ * @param {Object} query 
+ * @returns {{ isValid: boolean, page?: number, limit?: number, completed?: boolean, priority?: string, error?: string }}
+ */
+const validateTaskFilterQuery = (query = {}) => {
+  const paginationResult = validatePagination(query);
+  if (!paginationResult.isValid) {
+    return paginationResult;
+  }
+
+  let completedFilter = undefined;
+  if (query.completed !== undefined) {
+    const val = String(query.completed).trim().toLowerCase();
+    if (val === 'true') {
+      completedFilter = true;
+    } else if (val === 'false') {
+      completedFilter = false;
+    } else {
+      return { isValid: false, error: "Invalid completed parameter: must be 'true' or 'false'" };
+    }
+  }
+
+  let priorityFilter = undefined;
+  if (query.priority !== undefined) {
+    const val = String(query.priority).trim().toLowerCase();
+    if (!ALLOWED_PRIORITIES.includes(val)) {
+      return { isValid: false, error: "Invalid priority parameter: must be 'low', 'medium', or 'high'" };
+    }
+    priorityFilter = val;
+  }
+
+  return {
+    isValid: true,
+    page: paginationResult.page,
+    limit: paginationResult.limit,
+    completed: completedFilter,
+    priority: priorityFilter
+  };
+};
+
 module.exports = {
   isValidEmail,
   normalizeEmail,
   isValidUUID,
   isValidMetadata,
+  isValidDate,
   validateSignupInput,
   validateLoginInput,
   validateGameInput,
@@ -381,6 +556,10 @@ module.exports = {
   validateUpdateSessionInput,
   validateCreateMemoryInput,
   validateUpdateMemoryInput,
+  validateCreateTaskInput,
+  validateUpdateTaskInput,
   validatePagination,
+  validateTaskFilterQuery,
+  ALLOWED_PRIORITIES,
   MIN_PASSWORD_LENGTH
 };

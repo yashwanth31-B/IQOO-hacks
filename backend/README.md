@@ -21,14 +21,16 @@ backend/
 │   │   ├── game.controller.js  # Game catalog handlers
 │   │   ├── health.controller.js # Health check endpoint handler (with DB status)
 │   │   ├── memory.controller.js # Gaming Second Brain memory handlers
-│   │   └── session.controller.js # Gaming session lifecycle handlers
+│   │   ├── session.controller.js # Gaming session lifecycle handlers
+│   │   └── task.controller.js  # Productivity & task lifecycle handlers
 │   ├── routes/                 # API route definitions
 │   │   ├── auth.routes.js      # Authentication endpoints (/api/auth)
 │   │   ├── game.routes.js      # Game endpoints (/api/games)
 │   │   ├── health.routes.js    # Health check route
 │   │   ├── index.js            # Central route aggregator (/api)
 │   │   ├── memory.routes.js    # Gaming memory endpoints (/api/memories)
-│   │   └── session.routes.js   # Gaming session endpoints (/api/sessions)
+│   │   ├── session.routes.js   # Gaming session endpoints (/api/sessions)
+│   │   └── task.routes.js      # Productivity task endpoints (/api/tasks)
 │   ├── middleware/             # Express middlewares
 │   │   ├── auth.middleware.js  # JWT Bearer token authentication middleware
 │   │   └── error.middleware.js # Centralized error & 404 handlers
@@ -36,10 +38,11 @@ backend/
 │   │   ├── auth.service.js     # User registration, password hashing, verification
 │   │   ├── game.service.js     # Game creation and catalog queries
 │   │   ├── memory.service.js   # Memory creation, JSONB metadata, session joins, ownership
-│   │   └── session.service.js  # Session creation, duration calculation, ownership enforcement
+│   │   ├── session.service.js  # Session creation, duration calculation, ownership enforcement
+│   │   └── task.service.js     # Task creation, filtering, pagination, and ownership enforcement
 │   ├── utils/                  # Reusable utility functions
 │   │   ├── jwt.utils.js        # JWT signing & verification helpers
-│   │   └── validation.utils.js # Email, UUID, game, session, memory, and pagination validation
+│   │   └── validation.utils.js # Email, UUID, game, session, memory, task, and filter validation
 │   ├── db/                     # PostgreSQL database layer
 │   │   ├── migrations/         # Plain SQL migration files
 │   │   │   └── 001_initial_schema.sql
@@ -50,7 +53,8 @@ backend/
 │   ├── tests/                  # Automated test suites
 │   │   ├── auth.test.js        # Authentication & health test suite (15 tests)
 │   │   ├── memory.test.js      # Gaming memory test suite (22 tests)
-│   │   └── session.test.js     # Gaming session & games test suite (20 tests)
+│   │   ├── session.test.js     # Gaming session & games test suite (20 tests)
+│   │   └── task.test.js        # Productivity & tasks test suite (30 tests)
 │   └── server.js               # Express application entry point & server bootstrap
 ├── .env.example                # Template for environment variables
 ├── .gitignore                  # Backend-specific ignore rules
@@ -631,7 +635,206 @@ cp .env.example .env
 
 ---
 
-### 5. System Health (`/api/health`)
+### 5. Productivity & Tasks (`/api/tasks`)
+
+> 📋 **Overview**: The Productivity API powers the transition phase of the AI Gaming Copilot. It allows gamers to maintain and balance real-world responsibilities, study sessions, and gaming preparation tasks.
+>
+> 🔒 **Security Notice**: All task endpoints require a valid JWT via `Authorization: Bearer <token>`. Strict user scoping (`WHERE id = $1 AND user_id = $2`) is enforced across all operations. Accessing, modifying, or deleting another user's task returns `404 Not Found` without disclosing existence (IDOR prevention).
+
+#### Create Task
+- **Method / Path**: `POST /api/tasks`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Request Body**:
+  ```json
+  {
+    "title": "Complete DBMS assignment",
+    "description": "Finish normalization questions and submit the assignment.",
+    "priority": "high",
+    "dueDate": "2026-09-25T18:00:00.000Z",
+    "estimatedMinutes": 60
+  }
+  ```
+- **Validation**:
+  - `title`: Required, non-empty string, max 255 chars. Trimmed automatically.
+  - `description`: Optional string.
+  - `priority`: Optional, must be `'low'`, `'medium'`, or `'high'` (defaults to `'medium'`).
+  - `dueDate`: Optional valid ISO date string.
+  - `estimatedMinutes`: Optional positive integer (`> 0`).
+  - `completed`: Defaults to `false` initially.
+  - `user_id`: Enforced strictly from `req.user.id`.
+- **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Task created successfully",
+    "task": {
+      "id": "3e10ec19-e1fa-4ea1-aa2f-5b5ddb011c69",
+      "userId": "f4af628d-4fd5-4bf8-8ca9-48611bb77cfa",
+      "title": "Complete DBMS assignment",
+      "description": "Finish normalization questions and submit the assignment.",
+      "priority": "high",
+      "dueDate": "2026-09-25T18:00:00.000Z",
+      "estimatedMinutes": 60,
+      "completed": false,
+      "createdAt": "2026-09-21T04:51:34.250Z",
+      "updatedAt": "2026-09-21T04:51:34.250Z"
+    }
+  }
+  ```
+
+#### Get User Tasks (Paginated & Filterable)
+- **Method / Path**: `GET /api/tasks`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Query Parameters**:
+  - `page`: Page number (default: `1`, min: `1`).
+  - `limit`: Number of tasks per page (default: `20`, min: `1`, max: `100`).
+  - `completed`: Filter by status (`true` or `false`).
+  - `priority`: Filter by priority (`low`, `medium`, or `high`).
+- **Examples**:
+  - `GET /api/tasks?completed=false`
+  - `GET /api/tasks?priority=high`
+  - `GET /api/tasks?completed=false&priority=high&page=1&limit=10`
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id": "3e10ec19-e1fa-4ea1-aa2f-5b5ddb011c69",
+        "userId": "f4af628d-4fd5-4bf8-8ca9-48611bb77cfa",
+        "title": "Complete DBMS assignment",
+        "description": "Finish normalization questions and submit the assignment.",
+        "priority": "high",
+        "dueDate": "2026-09-25T18:00:00.000Z",
+        "estimatedMinutes": 60,
+        "completed": false,
+        "createdAt": "2026-09-21T04:51:34.250Z",
+        "updatedAt": "2026-09-21T04:51:34.250Z"
+      }
+    ],
+    "tasks": [ ... ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+  ```
+
+#### Get Single Task
+- **Method / Path**: `GET /api/tasks/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "task": {
+      "id": "3e10ec19-e1fa-4ea1-aa2f-5b5ddb011c69",
+      "userId": "f4af628d-4fd5-4bf8-8ca9-48611bb77cfa",
+      "title": "Complete DBMS assignment",
+      "description": "Finish normalization questions and submit the assignment.",
+      "priority": "high",
+      "dueDate": "2026-09-25T18:00:00.000Z",
+      "estimatedMinutes": 60,
+      "completed": false,
+      "createdAt": "2026-09-21T04:51:34.250Z",
+      "updatedAt": "2026-09-21T04:51:34.250Z"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Task found and returned.
+  - `400 Bad Request`: Invalid UUID format.
+  - `401 Unauthorized`: Missing or invalid token.
+  - `404 Not Found`: Task does not exist or belongs to another user.
+
+#### Update Task
+- **Method / Path**: `PATCH /api/tasks/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Request Body** *(at least one field)*:
+  ```json
+  {
+    "title": "Complete DBMS Assignment & Lab Manual",
+    "priority": "high",
+    "estimatedMinutes": 90
+  }
+  ```
+- **Allowed Fields**: `title`, `description`, `priority`, `dueDate`, `estimatedMinutes`, `completed`.
+- **Restricted Fields**: Modification of `id`, `userId`, `user_id`, `createdAt`, or `created_at` returns `400 Bad Request`.
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Task updated successfully",
+    "task": {
+      "id": "3e10ec19-e1fa-4ea1-aa2f-5b5ddb011c69",
+      "userId": "f4af628d-4fd5-4bf8-8ca9-48611bb77cfa",
+      "title": "Complete DBMS Assignment & Lab Manual",
+      "description": "Finish normalization questions and submit the assignment.",
+      "priority": "high",
+      "dueDate": "2026-09-25T18:00:00.000Z",
+      "estimatedMinutes": 90,
+      "completed": false,
+      "createdAt": "2026-09-21T04:51:34.250Z",
+      "updatedAt": "2026-09-21T04:51:34.311Z"
+    }
+  }
+  ```
+
+#### Mark Task Completed
+- **Method / Path**: `PATCH /api/tasks/:id/complete`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Task marked as completed",
+    "task": {
+      "id": "3e10ec19-e1fa-4ea1-aa2f-5b5ddb011c69",
+      "userId": "f4af628d-4fd5-4bf8-8ca9-48611bb77cfa",
+      "completed": true,
+      "updatedAt": "2026-09-21T04:51:34.315Z"
+    }
+  }
+  ```
+
+#### Mark Task Incomplete
+- **Method / Path**: `PATCH /api/tasks/:id/incomplete`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Task marked as incomplete",
+    "task": {
+      "id": "3e10ec19-e1fa-4ea1-aa2f-5b5ddb011c69",
+      "userId": "f4af628d-4fd5-4bf8-8ca9-48611bb77cfa",
+      "completed": false,
+      "updatedAt": "2026-09-21T04:51:34.318Z"
+    }
+  }
+  ```
+
+#### Delete Task
+- **Method / Path**: `DELETE /api/tasks/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Task deleted successfully"
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Task deleted.
+  - `400 Bad Request`: Invalid UUID format.
+  - `401 Unauthorized`: Missing or invalid token.
+  - `404 Not Found`: Task does not exist or belongs to another user.
+
+---
+
+### 6. System Health (`/api/health`)
 
 - **Method / Path**: `GET /api/health`
 - **Auth Required**: No
