@@ -18,6 +18,7 @@ export const AppLayout = () => {
     { to: '/sessions', label: 'Gaming Sessions', icon: '🎮' },
     { to: '/memories', label: 'Second Brain', icon: '🧠' },
     { to: '/tasks', label: 'Productivity Tasks', icon: '⚡' },
+    { to: '/copilot', label: 'AI Copilot', icon: '🤖' },
   ];
 
   return (

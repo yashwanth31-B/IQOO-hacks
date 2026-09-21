@@ -543,6 +543,32 @@ const validateTaskFilterQuery = (query = {}) => {
   };
 };
 
+/**
+ * Validate AI chat input payload
+ * @param {Object} param0 
+ * @returns {{ isValid: boolean, message?: string, error?: string }}
+ */
+const validateAiChatInput = ({ message } = {}) => {
+  if (message === undefined || message === null) {
+    return { isValid: false, error: 'Message is required' };
+  }
+
+  if (typeof message !== 'string') {
+    return { isValid: false, error: 'Message must be a string' };
+  }
+
+  const trimmed = message.trim();
+  if (trimmed.length === 0) {
+    return { isValid: false, error: 'Message is required' };
+  }
+
+  if (trimmed.length > 2000) {
+    return { isValid: false, error: 'Message must not exceed 2000 characters' };
+  }
+
+  return { isValid: true, message: trimmed };
+};
+
 module.exports = {
   isValidEmail,
   normalizeEmail,
@@ -560,6 +586,7 @@ module.exports = {
   validateUpdateTaskInput,
   validatePagination,
   validateTaskFilterQuery,
+  validateAiChatInput,
   ALLOWED_PRIORITIES,
   MIN_PASSWORD_LENGTH
 };

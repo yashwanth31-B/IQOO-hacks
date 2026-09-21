@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard';
 import Sessions from './pages/Sessions';
 import Memories from './pages/Memories';
 import Tasks from './pages/Tasks';
+import Copilot from './pages/Copilot';
 
 /**
  * Root index redirector:
@@ -54,6 +55,7 @@ export function App() {
                 <Route path="/sessions" element={<Sessions />} />
                 <Route path="/memories" element={<Memories />} />
                 <Route path="/tasks" element={<Tasks />} />
+                <Route path="/copilot" element={<Copilot />} />
               </Route>
             </Route>
 

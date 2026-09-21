@@ -345,6 +345,58 @@ async function runFrontendIntegrationTests() {
       historyRes.body.sessions.some((s) => s.id === activeSessionId && s.score === 24);
     record(19, 'Ended session appears in user history (GET /api/sessions) -> 200', t19Passed, `Found in history: ${t19Passed}`);
 
+    // ========================================================================
+    // STEP 10 AI COPILOT & SECOND BRAIN FOUNDATION TESTS
+    // ========================================================================
+
+    // ------------------------------------------------------------------------
+    // Test 20: AI Chat endpoint requires authentication -> 401
+    // ------------------------------------------------------------------------
+    const aiUnauthRes = await request('http://localhost:5000/api/ai/chat', {
+      method: 'POST',
+      body: { message: 'Hello' }
+    });
+    const t20Passed = aiUnauthRes.status === 401 && aiUnauthRes.body.success === false;
+    record(20, 'AI Chat requires authentication (POST /api/ai/chat) -> 401', t20Passed, `Status: ${aiUnauthRes.status}`);
+
+    // ------------------------------------------------------------------------
+    // Test 21: AI Chat accepts authenticated question with Second Brain sources -> 200
+    // ------------------------------------------------------------------------
+    const aiChatRes = await request('http://localhost:5000/api/ai/chat', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { message: 'What gaming data do you have for me?' }
+    });
+    const aiData = aiChatRes.body?.data;
+    const t21Passed =
+      aiChatRes.status === 200 &&
+      aiChatRes.body.success === true &&
+      typeof aiData?.message === 'string' &&
+      Array.isArray(aiData?.sources?.sessions) &&
+      aiData.sources.sessions.some((s) => s.id === activeSessionId);
+    record(21, 'AI Chat accepts query with scoped Second Brain sources -> 200', t21Passed, `Sessions count: ${aiData?.sources?.sessions?.length}`);
+
+    // ------------------------------------------------------------------------
+    // Test 22: AI Chat answers suggested question "When did I perform best?" -> 200
+    // ------------------------------------------------------------------------
+    const aiBestRes = await request('http://localhost:5000/api/ai/chat', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { message: 'When did I perform best?' }
+    });
+    const bestMsg = aiBestRes.body?.data?.message || '';
+    const t22Passed =
+      aiBestRes.status === 200 &&
+      (bestMsg.includes('24') || bestMsg.includes('score') || bestMsg.includes(newGameName));
+    record(22, 'AI Chat synthesizes response from Second Brain session data -> 200', t22Passed, `Message preview: "${bestMsg.slice(0, 60)}..."`);
+
+    // ------------------------------------------------------------------------
+    // Test 23: Vite serves /copilot client route entry point -> 200
+    // ------------------------------------------------------------------------
+    const copilotRouteRes = await request('http://localhost:5173/copilot');
+    const t23Passed = copilotRouteRes.status === 200 && copilotRouteRes.raw.includes('AI Gaming Copilot');
+    record(23, 'Frontend serves /copilot application route -> 200', t23Passed, `Status: ${copilotRouteRes.status}`);
+
     // Clean up test user & game in PostgreSQL
     console.log('\n--- CLEANING UP TEST DATA ---');
     await db.query('DELETE FROM users WHERE email = $1;', [testUserEmail]);

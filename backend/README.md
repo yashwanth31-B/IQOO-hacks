@@ -17,6 +17,7 @@ Core backend service for the AI Gaming Copilot + Gaming Second Brain hackathon p
 backend/
 ├── src/
 │   ├── controllers/            # Request handlers and response formatting
+│   │   ├── ai.controller.js    # AI Copilot chat request handlers
 │   │   ├── auth.controller.js  # Signup, login, and profile handlers
 │   │   ├── game.controller.js  # Game catalog handlers
 │   │   ├── health.controller.js # Health check endpoint handler (with DB status)
@@ -24,6 +25,7 @@ backend/
 │   │   ├── session.controller.js # Gaming session lifecycle handlers
 │   │   └── task.controller.js  # Productivity & task lifecycle handlers
 │   ├── routes/                 # API route definitions
+│   │   ├── ai.routes.js        # AI Copilot endpoints (/api/ai)
 │   │   ├── auth.routes.js      # Authentication endpoints (/api/auth)
 │   │   ├── game.routes.js      # Game endpoints (/api/games)
 │   │   ├── health.routes.js    # Health check route
@@ -35,6 +37,7 @@ backend/
 │   │   ├── auth.middleware.js  # JWT Bearer token authentication middleware
 │   │   └── error.middleware.js # Centralized error & 404 handlers
 │   ├── services/               # Business logic & data operations
+│   │   ├── ai.service.js       # Second Brain context retrieval & AI provider abstraction
 │   │   ├── auth.service.js     # User registration, password hashing, verification
 │   │   ├── game.service.js     # Game creation and catalog queries
 │   │   ├── memory.service.js   # Memory creation, JSONB metadata, session joins, ownership
@@ -42,7 +45,7 @@ backend/
 │   │   └── task.service.js     # Task creation, filtering, pagination, and ownership enforcement
 │   ├── utils/                  # Reusable utility functions
 │   │   ├── jwt.utils.js        # JWT signing & verification helpers
-│   │   └── validation.utils.js # Email, UUID, game, session, memory, task, and filter validation
+│   │   └── validation.utils.js # Email, UUID, game, session, memory, task, and AI chat validation
 │   ├── db/                     # PostgreSQL database layer
 │   │   ├── migrations/         # Plain SQL migration files
 │   │   │   └── 001_initial_schema.sql
@@ -51,6 +54,7 @@ backend/
 │   │   ├── migrate.js          # Migration runner (tracks applied in schema_migrations)
 │   │   └── verify-schema.js    # Schema inspection utility
 │   ├── tests/                  # Automated test suites
+│   │   ├── ai.test.js          # AI Copilot chat & Second Brain context test suite (13 tests)
 │   │   ├── auth.test.js        # Authentication & health test suite (15 tests)
 │   │   ├── memory.test.js      # Gaming memory test suite (22 tests)
 │   │   ├── session.test.js     # Gaming session & games test suite (20 tests)
@@ -846,3 +850,66 @@ cp .env.example .env
     "database": "connected"
   }
   ```
+
+---
+
+### 7. AI Copilot & Second Brain Context (`/api/ai`)
+
+#### Send Message to AI Copilot
+- **Method / Path**: `POST /api/ai/chat`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Headers**:
+  ```http
+  Authorization: Bearer <jwt_token>
+  Content-Type: application/json
+  ```
+- **Request Body**:
+  ```json
+  {
+    "message": "When did I perform best?"
+  }
+  ```
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "message": "Your strongest recorded session was your Valorant session on Sep 20, 2026 with a score of 98 and rating \"MVP Radiant\".\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)",
+      "sources": {
+        "sessions": [
+          {
+            "id": "e44dcfd4-28b7-4b71-9ec7-c75cbf3f3456",
+            "gameName": "Valorant",
+            "platform": "PC",
+            "startedAt": "2026-09-20T18:30:00.000Z",
+            "score": 98,
+            "performance": "MVP Radiant"
+          }
+        ],
+        "memories": [
+          {
+            "id": "76495db6-1d1d-44aa-8fbc-8919b4869c3a",
+            "title": "Ascent A-Site Clutch Ace",
+            "memoryType": "highlight",
+            "gameName": "Valorant"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "3e10ec19-e1fa-4ea1-aa2f-5b5ddb011c69",
+            "title": "Review Ascent VoD",
+            "priority": "high",
+            "completed": false
+          }
+        ]
+      },
+      "provider": "development"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Chat query processed with scoped Second Brain context.
+  - `400 Bad Request`: Missing message, non-string message, whitespace-only, or message exceeding 2000 characters.
+  - `401 Unauthorized`: Missing, expired, or invalid JWT Bearer token.
+  - `500 Internal Server Error`: Safe generic error response (no internal stack traces or secrets exposed).
+
