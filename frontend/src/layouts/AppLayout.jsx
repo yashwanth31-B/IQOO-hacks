@@ -96,6 +96,18 @@ export const AppLayout = () => {
               <span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
+          <a
+            href={`http://${window.location.hostname || 'localhost'}:8000`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileMenuOpen(false)}
+            className="nav-link"
+            style={{ color: '#38bdf8', border: '1px dashed rgba(56, 189, 248, 0.4)', marginTop: '0.4rem' }}
+            title="Open newly pulled Gaming Second Brain Cockpit HUD"
+          >
+            <span className="nav-icon">🚀</span>
+            <span className="nav-label">Cyber HUD (8000) ↗</span>
+          </a>
         </nav>
 
         <div className="sidebar-footer">
