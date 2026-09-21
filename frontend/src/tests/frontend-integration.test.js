@@ -397,6 +397,89 @@ async function runFrontendIntegrationTests() {
     const t23Passed = copilotRouteRes.status === 200 && copilotRouteRes.raw.includes('AI Gaming Copilot');
     record(23, 'Frontend serves /copilot application route -> 200', t23Passed, `Status: ${copilotRouteRes.status}`);
 
+    // ========================================================================
+    // STEP 12 PERSISTENT AI CHAT HISTORY TESTS
+    // ========================================================================
+
+    // ------------------------------------------------------------------------
+    // Test 24: Unauthenticated access to conversations blocked -> 401
+    // ------------------------------------------------------------------------
+    const unauthConvoRes = await request('http://localhost:5000/api/ai/conversations');
+    const t24Passed = unauthConvoRes.status === 401 && unauthConvoRes.body.success === false;
+    record(24, 'Unauthenticated access to conversation history blocked -> 401', t24Passed, `Status: ${unauthConvoRes.status}`);
+
+    // ------------------------------------------------------------------------
+    // Test 25: Authenticated user loads conversations -> 200
+    // ------------------------------------------------------------------------
+    const listConvoRes = await request('http://localhost:5000/api/ai/conversations', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t25Passed =
+      listConvoRes.status === 200 &&
+      listConvoRes.body.success === true &&
+      Array.isArray(listConvoRes.body.data?.conversations);
+    record(25, 'Authenticated user loads conversations -> 200', t25Passed, `Found ${listConvoRes.body?.data?.conversations?.length} conversations`);
+
+    // ------------------------------------------------------------------------
+    // Test 26: Create new conversation explicitly -> 201
+    // ------------------------------------------------------------------------
+    const newConvoRes = await request('http://localhost:5000/api/ai/conversations', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { title: 'Apex Clutch Breakdown' }
+    });
+    const feConvoId = newConvoRes.body?.data?.conversation?.id;
+    const t26Passed =
+      newConvoRes.status === 201 &&
+      newConvoRes.body.success === true &&
+      Boolean(feConvoId) &&
+      newConvoRes.body?.data?.conversation?.title === 'Apex Clutch Breakdown';
+    record(26, 'Create new persistent conversation -> 201', t26Passed, `Conversation ID: ${feConvoId}`);
+
+    // ------------------------------------------------------------------------
+    // Test 27: Send chat message associated with conversation -> 200
+    // ------------------------------------------------------------------------
+    const sendInConvoRes = await request('http://localhost:5000/api/ai/chat', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: {
+        message: 'How did I perform in Apex Legends?',
+        conversationId: feConvoId
+      }
+    });
+    const t27Passed =
+      sendInConvoRes.status === 200 &&
+      sendInConvoRes.body.success === true &&
+      sendInConvoRes.body?.data?.conversationId === feConvoId &&
+      typeof sendInConvoRes.body?.data?.message === 'string';
+    record(27, 'Send chat message linked to conversation -> 200', t27Passed, `Returned conversationId: ${sendInConvoRes.body?.data?.conversationId}`);
+
+    // ------------------------------------------------------------------------
+    // Test 28: Reload conversation (restores messages across refresh) -> 200
+    // ------------------------------------------------------------------------
+    const reloadConvoRes = await request(`http://localhost:5000/api/ai/conversations/${feConvoId}`, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const restoredMessages = reloadConvoRes.body?.data?.conversation?.messages || [];
+    const t28Passed =
+      reloadConvoRes.status === 200 &&
+      reloadConvoRes.body.success === true &&
+      restoredMessages.length >= 2 &&
+      restoredMessages.some((m) => m.role === 'user') &&
+      restoredMessages.some((m) => m.role === 'assistant');
+    record(28, 'Restore conversation messages across refresh -> 200', t28Passed, `Restored messages count: ${restoredMessages.length}`);
+
+    // ------------------------------------------------------------------------
+    // Test 29: Delete conversation -> 200
+    // ------------------------------------------------------------------------
+    const deleteConvoRes = await request(`http://localhost:5000/api/ai/conversations/${feConvoId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t29Passed = deleteConvoRes.status === 200 && deleteConvoRes.body.success === true;
+    record(29, 'Delete conversation -> 200', t29Passed, `Status: ${deleteConvoRes.status}`);
+
+
     // Clean up test user & game in PostgreSQL
     console.log('\n--- CLEANING UP TEST DATA ---');
     await db.query('DELETE FROM users WHERE email = $1;', [testUserEmail]);

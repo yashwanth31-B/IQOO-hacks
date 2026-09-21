@@ -333,14 +333,17 @@ const generateDevelopmentResponse = (message, context) => {
   return 'AI service is not configured yet. The Copilot interface is ready for AI integration.';
 };
 
+const chatHistoryService = require('./chat-history.service');
+
 /**
  * Generate completion using Google Gemini SDK
  * 
  * @param {string} message - User question
  * @param {Object} context - Selected intelligent Second Brain context
+ * @param {Array} [history=[]] - Bounded recent conversation history
  * @returns {Promise<{ message: string, insights: Array<string>, referencedSourceIds: Object }>}
  */
-const generateGeminiCompletion = async (message, context) => {
+const generateGeminiCompletion = async (message, context, history = []) => {
   const apiKey = process.env.AI_API_KEY;
   if (!apiKey) {
     throw new Error('AI_API_KEY is not configured');
@@ -358,8 +361,9 @@ STRICT OPERATIONAL RULES:
 3. If the supplied records do not contain sufficient information to answer the question, clearly and politely state that the available Second Brain records do not contain that information. Never guess.
 4. Distinguish recorded facts (such as scores, recorded durations, dates) from interpretations or general gameplay advice.
 5. When comparing sessions or evaluating performance, cite the specific recorded metrics (e.g. score, performance rating, duration) supporting your conclusion.
-6. Keep responses concise, actionable, and gamer-oriented.
-7. Return your response strictly as a valid JSON object matching this schema:
+6. Use recent conversation history for conversational context (e.g. follow-up questions or pronouns), but never let conversation history override factual Second Brain records.
+7. Keep responses concise, actionable, and gamer-oriented.
+8. Return your response strictly as a valid JSON object matching this schema:
 {
   "message": "Direct, natural language response to the user's inquiry.",
   "insights": ["Concise observation, lesson, or actionable tip based on their data"],
@@ -370,7 +374,14 @@ STRICT OPERATIONAL RULES:
   }
 }`;
 
-  const prompt = `USER QUESTION: "${message}"
+  const formattedHistory = Array.isArray(history) && history.length > 0
+    ? history.slice(-15).map((m) => `[${m.role === 'user' ? 'User' : 'Assistant'}]: ${m.content}`).join('\n')
+    : 'None (new conversation)';
+
+  const prompt = `CONVERSATION HISTORY:
+${formattedHistory}
+
+CURRENT USER QUESTION: "${message}"
 
 USER SECOND BRAIN RECORDS:
 User Profile: ${context.user.name} (ID: ${context.user.id})
@@ -476,9 +487,10 @@ const buildSources = (context, referencedIds = null) => {
  * 
  * @param {string} message - User message
  * @param {Object} context - User gaming context
+ * @param {Array} [history=[]] - Bounded conversation history
  * @returns {Promise<{ message: string, insights?: Array<string>, sources: Object, provider: string }>}
  */
-const generateResponse = async (message, context) => {
+const generateResponse = async (message, context, history = []) => {
   const provider = (process.env.AI_PROVIDER || 'development').toLowerCase();
   const apiKey = process.env.AI_API_KEY;
 
@@ -499,7 +511,7 @@ const generateResponse = async (message, context) => {
   // 3. Gemini mode
   if (provider === 'gemini') {
     try {
-      const completion = await generateGeminiCompletion(message, intelligentContext);
+      const completion = await generateGeminiCompletion(message, intelligentContext, history);
 
       const sources = buildSources(intelligentContext, completion.referencedSourceIds);
       return {
@@ -549,17 +561,57 @@ const generateResponse = async (message, context) => {
 };
 
 /**
- * Process chat interaction: retrieve context and generate response
+ * Process chat interaction: retrieve context, bound history, and generate response
+ * Supports existing requests without conversationId as well as multi-turn conversations
  * 
  * @param {Object} param0 
  * @param {string} param0.userId - Authenticated user UUID
  * @param {string} param0.message - User query
- * @returns {Promise<{ message: string, insights?: Array<string>, sources: Object, provider: string }>}
+ * @param {string} [param0.conversationId] - Optional existing conversation UUID
+ * @returns {Promise<{ message: string, insights?: Array<string>, sources: Object, provider: string, conversationId: string }>}
  */
-const processChat = async ({ userId, message }) => {
+const processChat = async ({ userId, message, conversationId = null }) => {
+  let targetConversationId = conversationId;
+  let history = [];
+
+  if (targetConversationId) {
+    // 1. Verify the conversation belongs to req.user.id
+    await chatHistoryService.verifyConversationOwnership(targetConversationId, userId);
+    // 2. Load recent messages from that conversation (bounded)
+    history = await chatHistoryService.getRecentConversationMessages(targetConversationId, userId, 15);
+  } else {
+    // Automatically create a new conversation with deterministic title
+    const title = chatHistoryService.generateConversationTitle(message);
+    const convo = await chatHistoryService.createConversation({ userId, title });
+    targetConversationId = convo.id;
+  }
+
+  // 3. Retrieve the existing Second Brain context
   const context = await getUserContext(userId);
-  const result = await generateResponse(message, context);
-  return result;
+
+  // 4 & 5. Use existing intelligent context selection and send to AI provider
+  // 6. Generate the response
+  const result = await generateResponse(message, context, history);
+
+  // 7. Save user message
+  await chatHistoryService.saveUserMessage({
+    conversationId: targetConversationId,
+    content: message
+  });
+
+  // 8. Save assistant response
+  await chatHistoryService.saveAssistantMessage({
+    conversationId: targetConversationId,
+    content: result.message,
+    provider: result.provider,
+    sources: result.sources
+  });
+
+  // 9. Return the response with conversationId
+  return {
+    ...result,
+    conversationId: targetConversationId
+  };
 };
 
 module.exports = {
@@ -571,3 +623,4 @@ module.exports = {
   generateResponse,
   processChat
 };
+

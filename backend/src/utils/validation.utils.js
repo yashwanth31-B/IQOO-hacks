@@ -548,7 +548,7 @@ const validateTaskFilterQuery = (query = {}) => {
  * @param {Object} param0 
  * @returns {{ isValid: boolean, message?: string, error?: string }}
  */
-const validateAiChatInput = ({ message } = {}) => {
+const validateAiChatInput = ({ message, conversationId } = {}) => {
   if (message === undefined || message === null) {
     return { isValid: false, error: 'Message is required' };
   }
@@ -566,7 +566,33 @@ const validateAiChatInput = ({ message } = {}) => {
     return { isValid: false, error: 'Message must not exceed 2000 characters' };
   }
 
-  return { isValid: true, message: trimmed };
+  let cleanConversationId = undefined;
+  if (conversationId !== undefined && conversationId !== null) {
+    if (typeof conversationId !== 'string' || !isValidUUID(conversationId)) {
+      return { isValid: false, error: 'Invalid conversationId format: must be a valid UUID' };
+    }
+    cleanConversationId = conversationId.trim();
+  }
+
+  return { isValid: true, message: trimmed, conversationId: cleanConversationId };
+};
+
+/**
+ * Validate conversation creation payload
+ * @param {Object} param0 
+ * @returns {{ isValid: boolean, title?: string, error?: string }}
+ */
+const validateCreateConversationInput = ({ title } = {}) => {
+  if (title !== undefined && title !== null) {
+    if (typeof title !== 'string') {
+      return { isValid: false, error: 'Title must be a string' };
+    }
+    if (title.trim().length > 255) {
+      return { isValid: false, error: 'Title must not exceed 255 characters' };
+    }
+    return { isValid: true, title: title.trim() };
+  }
+  return { isValid: true, title: null };
 };
 
 module.exports = {
@@ -587,6 +613,8 @@ module.exports = {
   validatePagination,
   validateTaskFilterQuery,
   validateAiChatInput,
+  validateCreateConversationInput,
   ALLOWED_PRIORITIES,
   MIN_PASSWORD_LENGTH
 };
+
