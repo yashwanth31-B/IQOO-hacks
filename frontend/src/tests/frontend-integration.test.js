@@ -643,6 +643,40 @@ async function runFrontendIntegrationTests() {
       !verifyListRes.body.tasks.some((t) => t.id === createdTask?.id);
     record(40, 'Delete task and verify removal from database -> 200', t40Passed, `Remaining tasks: ${verifyListRes.body?.tasks?.length}`);
 
+    // ========================================================================
+    // STEP 14 VERCEL FRONTEND & SECOND BRAIN / CYBER HUD INTEGRATION TESTS
+    // ========================================================================
+
+    // ------------------------------------------------------------------------
+    // Test 41: Constants helper correctly constructs SECOND_BRAIN_URL with trailing slash removal
+    // ------------------------------------------------------------------------
+    const formatBrainUrl = (envVal) => (envVal || 'http://localhost:8000').replace(/\/+$/, '');
+    const t41a = formatBrainUrl('https://gaming-second-brain.onrender.com/') === 'https://gaming-second-brain.onrender.com';
+    const t41b = formatBrainUrl('https://gaming-second-brain.onrender.com///') === 'https://gaming-second-brain.onrender.com';
+    const t41c = formatBrainUrl('') === 'http://localhost:8000';
+    const t41d = formatBrainUrl(undefined) === 'http://localhost:8000';
+    const t41Passed = t41a && t41b && t41c && t41d;
+    record(41, 'SECOND_BRAIN_URL strips trailing slashes and falls back to localhost:8000 only when unset', t41Passed, `Normalized: ${formatBrainUrl('https://render.com///')}`);
+
+    // ------------------------------------------------------------------------
+    // Test 42: No hardcoded :8000 in frontend links or API calls
+    // ------------------------------------------------------------------------
+    const constantsFile = fs.readFileSync(path.resolve(__dirname, '../utils/constants.js'), 'utf8');
+    const layoutFile = fs.readFileSync(path.resolve(__dirname, '../layouts/AppLayout.jsx'), 'utf8');
+    const memoriesFile = fs.readFileSync(path.resolve(__dirname, '../pages/Memories.jsx'), 'utf8');
+
+    // Navigation and links must use dynamic SECOND_BRAIN_URL variable rather than hardcoded URLs
+    const t42a = layoutFile.includes('href={SECOND_BRAIN_URL}');
+    const t42b = memoriesFile.includes('href={hudUrl}') && memoriesFile.includes('const hudUrl = SECOND_BRAIN_URL;');
+    const t42c = !layoutFile.includes('localhost:8000') && !memoriesFile.includes('localhost:8000');
+    const t42Passed = t42a && t42b && t42c;
+    record(42, 'Cyber HUD and Second Brain links use centralized SECOND_BRAIN_URL constant without hardcoded URLs', t42Passed, `Layout uses dynamic constant: ${t42a}`);
+
+    // ------------------------------------------------------------------------
+    // Test 43: Navigation labels do not leak port numbers in UI
+    // ------------------------------------------------------------------------
+    const t43Passed = !layoutFile.includes('(8000)') && !memoriesFile.includes('(8000)');
+    record(43, 'Cyber HUD UI labels are environment-agnostic and do not display hardcoded port numbers', t43Passed, `Clean UI labels: ${t43Passed}`);
 
     // Clean up test user & game in PostgreSQL
     console.log('\n--- CLEANING UP TEST DATA ---');

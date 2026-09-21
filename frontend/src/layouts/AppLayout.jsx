@@ -128,7 +128,7 @@ export const AppLayout = () => {
             title="Open Python NLP match simulation cockpit"
           >
             <span className="nav-icon">🚀</span>
-            <span className="nav-label">Cyber HUD (8000) ↗</span>
+            <span className="nav-label">Cyber HUD ↗</span>
           </a>
         </nav>
 

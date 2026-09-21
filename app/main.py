@@ -2,6 +2,7 @@ import os
 import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from typing import Optional, List, Dict, Any
@@ -98,17 +99,53 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS configuration
+# Allow production Vercel frontend as well as local development environments
+default_origins = [
+    "https://ai-gaming-copilot.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:5000",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+]
+custom_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+allowed_origins = list(set(default_origins + custom_origins))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 # Static files setup
 static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
+@app.get("/hud")
+@app.get("/cyber-hud")
 async def serve_index():
     index_path = os.path.join(static_dir, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return JSONResponse({"message": "Gaming Second Brain API is running. UI assets loading."})
+
+# Health check endpoints for monitoring and cloud platform readiness
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "gaming-second-brain",
+        "version": settings.version
+    }
 
 # 1. System Status & Engine Switching
 @app.get("/api/status")

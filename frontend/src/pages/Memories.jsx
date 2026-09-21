@@ -92,7 +92,7 @@ export const Memories = () => {
             className="btn-primary"
             title="Launch external Python NLP simulation cockpit"
           >
-            🚀 Open Cyber HUD (8000) ↗
+            🚀 Open Cyber HUD ↗
           </a>
         </div>
       </div>
