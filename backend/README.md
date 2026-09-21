@@ -54,7 +54,7 @@ backend/
 │   │   ├── migrate.js          # Migration runner (tracks applied in schema_migrations)
 │   │   └── verify-schema.js    # Schema inspection utility
 │   ├── tests/                  # Automated test suites
-│   │   ├── ai.test.js          # AI Copilot chat & Second Brain context test suite (13 tests)
+│   │   ├── ai.test.js          # AI Copilot chat & Second Brain context test suite (18 tests)
 │   │   ├── auth.test.js        # Authentication & health test suite (15 tests)
 │   │   ├── memory.test.js      # Gaming memory test suite (22 tests)
 │   │   ├── session.test.js     # Gaming session & games test suite (20 tests)
@@ -869,12 +869,15 @@ cp .env.example .env
     "message": "When did I perform best?"
   }
   ```
-- **Response (200 OK)**:
+- **Response (200 OK - Gemini Provider)**:
   ```json
   {
     "success": true,
     "data": {
-      "message": "Your strongest recorded session was your Valorant session on Sep 20, 2026 with a score of 98 and rating \"MVP Radiant\".\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)",
+      "message": "Your strongest recorded session was your Valorant session on Sep 20, 2026 with a score of 98 and rating \"MVP Radiant\".",
+      "insights": [
+        "Your win rate and average combat score peak during evening sessions."
+      ],
       "sources": {
         "sessions": [
           {
@@ -903,13 +906,14 @@ cp .env.example .env
           }
         ]
       },
-      "provider": "development"
+      "provider": "gemini"
     }
   }
   ```
 - **Status Codes**:
-  - `200 OK`: Chat query processed with scoped Second Brain context.
+  - `200 OK`: Chat query processed with scoped Second Brain context (via Gemini AI or Development fallback).
   - `400 Bad Request`: Missing message, non-string message, whitespace-only, or message exceeding 2000 characters.
   - `401 Unauthorized`: Missing, expired, or invalid JWT Bearer token.
   - `500 Internal Server Error`: Safe generic error response (no internal stack traces or secrets exposed).
+
 

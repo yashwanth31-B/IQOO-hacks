@@ -142,5 +142,7 @@ Runs the automated end-to-end integration test suite verifying Vite dev serving,
 - **Context-Aware Second Brain Retrieval**: Whenever a question is asked, the backend queries sessions, memories, and tasks belonging strictly to the authenticated user and provides structured source badges.
 - **Interactive Suggested Inquiries**: Instant prompts ("When did I perform best?", "What was my last session?", "How much have I gamed?", "What tasks are pending?") to guide gamers.
 - **Thinking & Error Recovery**: Inline "Copilot is thinking..." animated indicators, graceful error state handling, and a 1-click "Try Again" retry mechanism without exposing server internals or stack traces.
+- **Gemini AI Integration**: Real Google Gemini completions when configured on the backend, complete with a verified "✨ Powered by Gemini" indicator badge, key actionable insights, and strict factual grounding against the user's Second Brain records.
+
 
 

@@ -46,6 +46,7 @@ export const Copilot = () => {
           id: `bot-${Date.now()}`,
           role: 'assistant',
           content: response.data.message || 'I have reviewed your Second Brain context.',
+          insights: Array.isArray(response.data.insights) ? response.data.insights : [],
           sources: response.data.sources || null,
           provider: response.data.provider || 'development',
           timestamp: new Date()
@@ -174,7 +175,18 @@ export const Copilot = () => {
                   </div>
                   <div className={`chat-bubble ${msg.role === 'user' ? 'bubble-user' : 'bubble-assistant'} ${msg.isError ? 'bubble-error' : ''}`}>
                     <div className="bubble-author">
-                      {msg.role === 'user' ? 'You' : 'Copilot'}
+                      {msg.role === 'user' ? (
+                        'You'
+                      ) : (
+                        <div className="bubble-author-row">
+                          <span>Copilot</span>
+                          {msg.provider === 'gemini' && (
+                            <span className="provider-badge-gemini" title="Verified Gemini AI response">
+                              ✨ Powered by Gemini
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="bubble-content">
                       {msg.content.split('\n').map((line, i) => (
@@ -183,6 +195,17 @@ export const Copilot = () => {
                         </p>
                       ))}
                     </div>
+
+                    {msg.insights && msg.insights.length > 0 && (
+                      <div className="copilot-insights">
+                        <span className="insights-label">💡 Key Insights:</span>
+                        <ul className="insights-list">
+                          {msg.insights.map((insight, idx) => (
+                            <li key={idx} className="insight-item">{insight}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {msg.sources && renderSources(msg.sources)}
 

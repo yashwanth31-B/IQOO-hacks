@@ -1,7 +1,9 @@
 const db = require('../db');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 /**
- * Service handling AI Context Retrieval and Provider Abstraction
+ * Service handling AI Context Retrieval, Intelligent Context Selection,
+ * and Google Gemini / Development Provider Integration
  */
 
 /**
@@ -45,7 +47,7 @@ const getUserContext = async (userId) => {
     LEFT JOIN games g ON s.game_id = g.id
     WHERE s.user_id = $1
     ORDER BY s.started_at DESC
-    LIMIT 10`,
+    LIMIT 20`,
     [userId]
   );
 
@@ -79,7 +81,7 @@ const getUserContext = async (userId) => {
     LEFT JOIN games g ON s.game_id = g.id
     WHERE m.user_id = $1
     ORDER BY m.created_at DESC
-    LIMIT 10`,
+    LIMIT 20`,
     [userId]
   );
 
@@ -108,7 +110,7 @@ const getUserContext = async (userId) => {
     FROM tasks
     WHERE user_id = $1
     ORDER BY created_at DESC
-    LIMIT 10`,
+    LIMIT 20`,
     [userId]
   );
 
@@ -135,6 +137,133 @@ const getUserContext = async (userId) => {
 };
 
 /**
+ * Intelligent Context Selection
+ * 
+ * Filters and prioritizes relevant Second Brain records according to the
+ * user's question, while bounding prompt size to maintain fast, efficient inference.
+ * 
+ * @param {string} message - User query
+ * @param {Object} fullContext - Full user context
+ * @returns {Object} Controlled, prioritized context
+ */
+const selectIntelligentContext = (message, fullContext) => {
+  const lower = (message || '').toLowerCase();
+  const { user, sessions, memories, tasks } = fullContext;
+
+  let prioritizedSessions = [...sessions];
+  let prioritizedMemories = [...memories];
+  let prioritizedTasks = [...tasks];
+
+  // 1. Detect query intent
+  const isPerformanceQuery =
+    lower.includes('best') ||
+    lower.includes('highest') ||
+    lower.includes('strongest') ||
+    lower.includes('score') ||
+    lower.includes('performance') ||
+    lower.includes('mvp') ||
+    lower.includes('clutch');
+
+  const isRecencyQuery =
+    lower.includes('last') ||
+    lower.includes('recent') ||
+    lower.includes('latest') ||
+    lower.includes('today') ||
+    lower.includes('yesterday');
+
+  const isTaskQuery =
+    lower.includes('task') ||
+    lower.includes('pending') ||
+    lower.includes('todo') ||
+    lower.includes('due') ||
+    lower.includes('homework') ||
+    lower.includes('study') ||
+    lower.includes('work');
+
+  // 2. Check for game-specific mentions
+  const allGameNames = [...new Set(sessions.map((s) => s.gameName).filter(Boolean))];
+  const matchedGameName = allGameNames.find((name) => lower.includes(name.toLowerCase()));
+
+  if (matchedGameName) {
+    // Prioritize sessions and memories matching the requested game title
+    const matchLower = matchedGameName.toLowerCase();
+    prioritizedSessions.sort((a, b) => {
+      const aMatch = a.gameName && a.gameName.toLowerCase() === matchLower ? 1 : 0;
+      const bMatch = b.gameName && b.gameName.toLowerCase() === matchLower ? 1 : 0;
+      return bMatch - aMatch;
+    });
+
+    prioritizedMemories.sort((a, b) => {
+      const aMatch =
+        (a.gameName && a.gameName.toLowerCase() === matchLower) ||
+        (a.title && a.title.toLowerCase().includes(matchLower))
+          ? 1
+          : 0;
+      const bMatch =
+        (b.gameName && b.gameName.toLowerCase() === matchLower) ||
+        (b.title && b.title.toLowerCase().includes(matchLower))
+          ? 1
+          : 0;
+      return bMatch - aMatch;
+    });
+  } else if (isPerformanceQuery) {
+    // Sort sessions by score descending (null scores at the end)
+    prioritizedSessions.sort((a, b) => (b.score || 0) - (a.score || 0));
+    // Prioritize highlights
+    prioritizedMemories.sort((a, b) => (b.memoryType === 'highlight' ? 1 : 0) - (a.memoryType === 'highlight' ? 1 : 0));
+  } else if (isRecencyQuery) {
+    // Sort sessions by startedAt descending
+    prioritizedSessions.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+  } else if (isTaskQuery) {
+    // Prioritize incomplete tasks and higher priority
+    const prioWeight = { high: 3, medium: 2, low: 1 };
+    prioritizedTasks.sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      return (prioWeight[b.priority] || 0) - (prioWeight[a.priority] || 0);
+    });
+  }
+
+  // 3. Enforce sensible limits to avoid oversized prompts
+  const boundedSessions = prioritizedSessions.slice(0, 6).map((s) => ({
+    id: s.id,
+    gameName: s.gameName,
+    platform: s.platform,
+    startedAt: s.startedAt,
+    endedAt: s.endedAt,
+    duration: s.duration,
+    score: s.score,
+    performance: s.performance,
+    notes: s.notes ? s.notes.slice(0, 250) : null
+  }));
+
+  const boundedMemories = prioritizedMemories.slice(0, 6).map((m) => ({
+    id: m.id,
+    title: m.title,
+    summary: m.summary ? m.summary.slice(0, 250) : null,
+    memoryType: m.memoryType,
+    gameName: m.gameName,
+    createdAt: m.createdAt
+  }));
+
+  const boundedTasks = prioritizedTasks.slice(0, 6).map((t) => ({
+    id: t.id,
+    title: t.title,
+    description: t.description ? t.description.slice(0, 150) : null,
+    priority: t.priority,
+    dueDate: t.dueDate,
+    estimatedMinutes: t.estimatedMinutes,
+    completed: t.completed
+  }));
+
+  return {
+    user,
+    sessions: boundedSessions,
+    memories: boundedMemories,
+    tasks: boundedTasks
+  };
+};
+
+/**
  * Synthesize a development response when external AI provider is unconfigured.
  * Answers common context queries factually from the user's Second Brain,
  * while clearly stating development status.
@@ -147,7 +276,10 @@ const generateDevelopmentResponse = (message, context) => {
   const lower = message.toLowerCase();
 
   // Query: Highest score or best performance
-  if ((lower.includes('best') || lower.includes('highest') || lower.includes('strongest')) && context.sessions.length > 0) {
+  if (
+    (lower.includes('best') || lower.includes('highest') || lower.includes('strongest') || lower.includes('score')) &&
+    context.sessions.length > 0
+  ) {
     const scored = context.sessions.filter((s) => s.score !== null);
     if (scored.length > 0) {
       const best = scored.reduce((max, s) => (s.score > max.score ? s : max), scored[0]);
@@ -188,7 +320,10 @@ const generateDevelopmentResponse = (message, context) => {
   }
 
   // Query: Total gaming time logged
-  if ((lower.includes('how much') || lower.includes('time') || lower.includes('spent') || lower.includes('gamed')) && context.sessions.length > 0) {
+  if (
+    (lower.includes('how much') || lower.includes('time') || lower.includes('spent') || lower.includes('gamed')) &&
+    context.sessions.length > 0
+  ) {
     const totalSeconds = context.sessions.reduce((acc, s) => acc + (s.duration || 0), 0);
     const totalMinutes = Math.round(totalSeconds / 60);
     return `You have logged approximately ${totalMinutes} minute(s) across your ${context.sessions.length} most recent recorded gaming session(s).\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
@@ -199,22 +334,119 @@ const generateDevelopmentResponse = (message, context) => {
 };
 
 /**
- * Pluggable AI Provider Adapter
+ * Generate completion using Google Gemini SDK
  * 
- * Supports external provider configuration via environment variables
- * (AI_PROVIDER, AI_API_KEY, AI_MODEL) with fallback to development adapter.
- * 
- * @param {string} message - User message
- * @param {Object} context - User gaming context
- * @returns {Promise<{ message: string, sources: Object, provider: string }>}
+ * @param {string} message - User question
+ * @param {Object} context - Selected intelligent Second Brain context
+ * @returns {Promise<{ message: string, insights: Array<string>, referencedSourceIds: Object }>}
  */
-const generateResponse = async (message, context) => {
-  const provider = process.env.AI_PROVIDER || 'development';
+const generateGeminiCompletion = async (message, context) => {
   const apiKey = process.env.AI_API_KEY;
+  if (!apiKey) {
+    throw new Error('AI_API_KEY is not configured');
+  }
 
-  // Build clean sources summary to return with the response
-  const sources = {
-    sessions: context.sessions.map((s) => ({
+  const modelName = process.env.AI_MODEL || 'gemini-1.5-flash';
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  const systemInstruction = `You are AI Gaming Copilot, an intelligent gaming assistant and Second Brain companion.
+You help the user understand their gaming journey based SOLELY on the supplied Second Brain records.
+
+STRICT OPERATIONAL RULES:
+1. Base all statements strictly on the provided Second Brain records (Sessions, Memories, Tasks).
+2. DO NOT invent or hallucinate sessions, games, scores, durations, dates, performance ratings, memories, or tasks.
+3. If the supplied records do not contain sufficient information to answer the question, clearly and politely state that the available Second Brain records do not contain that information. Never guess.
+4. Distinguish recorded facts (such as scores, recorded durations, dates) from interpretations or general gameplay advice.
+5. When comparing sessions or evaluating performance, cite the specific recorded metrics (e.g. score, performance rating, duration) supporting your conclusion.
+6. Keep responses concise, actionable, and gamer-oriented.
+7. Return your response strictly as a valid JSON object matching this schema:
+{
+  "message": "Direct, natural language response to the user's inquiry.",
+  "insights": ["Concise observation, lesson, or actionable tip based on their data"],
+  "referencedSourceIds": {
+    "sessionIds": ["uuid-of-referenced-session"],
+    "memoryIds": ["uuid-of-referenced-memory"],
+    "taskIds": ["uuid-of-referenced-task"]
+  }
+}`;
+
+  const prompt = `USER QUESTION: "${message}"
+
+USER SECOND BRAIN RECORDS:
+User Profile: ${context.user.name} (ID: ${context.user.id})
+Sessions: ${JSON.stringify(context.sessions, null, 2)}
+Memories: ${JSON.stringify(context.memories, null, 2)}
+Tasks: ${JSON.stringify(context.tasks, null, 2)}
+
+Provide your response strictly in the specified JSON format.`;
+
+  const model = genAI.getGenerativeModel({
+    model: modelName,
+    systemInstruction,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.2
+    }
+  });
+
+  // Timeout safety: 15 seconds max
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Gemini request timed out')), 15000);
+  });
+
+  try {
+    const generatePromise = model.generateContent(prompt);
+    const result = await Promise.race([generatePromise, timeoutPromise]);
+    clearTimeout(timer);
+
+    const responseText = result.response.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      // Strip markdown code fences if model wrapped response
+      const cleaned = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    }
+
+    return parsed;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+};
+
+/**
+ * Build sources summary strictly from the user's own context records
+ * 
+ * @param {Object} context 
+ * @param {Object} [referencedIds] 
+ * @returns {Object} Clean sources summary
+ */
+const buildSources = (context, referencedIds = null) => {
+  let matchedSessions = context.sessions;
+  let matchedMemories = context.memories;
+  let matchedTasks = context.tasks;
+
+  if (referencedIds) {
+    const sIds = new Set(referencedIds.sessionIds || []);
+    const mIds = new Set(referencedIds.memoryIds || []);
+    const tIds = new Set(referencedIds.taskIds || []);
+
+    if (sIds.size > 0) {
+      matchedSessions = context.sessions.filter((s) => sIds.has(s.id));
+    }
+    if (mIds.size > 0) {
+      matchedMemories = context.memories.filter((m) => mIds.has(m.id));
+    }
+    if (tIds.size > 0) {
+      matchedTasks = context.tasks.filter((t) => tIds.has(t.id));
+    }
+  }
+
+  return {
+    sessions: matchedSessions.map((s) => ({
       id: s.id,
       gameName: s.gameName,
       platform: s.platform,
@@ -222,48 +454,98 @@ const generateResponse = async (message, context) => {
       score: s.score,
       performance: s.performance
     })),
-    memories: context.memories.map((m) => ({
+    memories: matchedMemories.map((m) => ({
       id: m.id,
       title: m.title,
       memoryType: m.memoryType,
       gameName: m.gameName
     })),
-    tasks: context.tasks.map((t) => ({
+    tasks: matchedTasks.map((t) => ({
       id: t.id,
       title: t.title,
       priority: t.priority,
       completed: t.completed
     }))
   };
+};
 
-  // If no external API key is configured or provider is development
-  if (!apiKey || provider === 'development') {
-    const reply = generateDevelopmentResponse(message, context);
+/**
+ * Pluggable AI Provider Adapter
+ * 
+ * Supports Gemini AI with automatic fallback to development adapter
+ * 
+ * @param {string} message - User message
+ * @param {Object} context - User gaming context
+ * @returns {Promise<{ message: string, insights?: Array<string>, sources: Object, provider: string }>}
+ */
+const generateResponse = async (message, context) => {
+  const provider = (process.env.AI_PROVIDER || 'development').toLowerCase();
+  const apiKey = process.env.AI_API_KEY;
+
+  // 1. Intelligent context selection
+  const intelligentContext = selectIntelligentContext(message, context);
+
+  // 2. Development adapter mode
+  if (provider === 'development' || !apiKey) {
+    const reply = generateDevelopmentResponse(message, intelligentContext);
     return {
       message: reply,
-      sources,
+      insights: [],
+      sources: buildSources(intelligentContext),
       provider: 'development'
     };
   }
 
-  // If external provider is configured, handle securely
-  try {
-    // In future steps, external provider clients (e.g. Gemini, OpenAI) plug in here.
-    // For now, if an unhandled provider is specified:
-    const reply = generateDevelopmentResponse(message, context);
-    return {
-      message: reply,
-      sources,
-      provider
-    };
-  } catch (providerError) {
-    // Safe fallback if provider fails
-    return {
-      message: 'AI service is not configured yet. The Copilot interface is ready for AI integration.',
-      sources,
-      provider: 'development'
-    };
+  // 3. Gemini mode
+  if (provider === 'gemini') {
+    try {
+      const completion = await generateGeminiCompletion(message, intelligentContext);
+
+      const sources = buildSources(intelligentContext, completion.referencedSourceIds);
+      return {
+        message: completion.message || 'I have analyzed your Second Brain records.',
+        insights: Array.isArray(completion.insights) ? completion.insights : [],
+        sources,
+        provider: 'gemini'
+      };
+    } catch (geminiError) {
+      // Clean error handling: do NOT leak secrets, database credentials, or stack traces
+      const errorMessage = geminiError.message || '';
+
+      // If configuration or API key issue, safely fall back to development mode
+      if (
+        errorMessage.includes('AI_API_KEY') ||
+        errorMessage.includes('API key') ||
+        errorMessage.includes('not configured') ||
+        errorMessage.includes('API_KEY_INVALID')
+      ) {
+        const reply = generateDevelopmentResponse(message, intelligentContext);
+        return {
+          message: reply,
+          insights: [],
+          sources: buildSources(intelligentContext),
+          provider: 'development'
+        };
+      }
+
+      // If malformed AI response or other provider error
+      return {
+        message: 'The Copilot is temporarily unavailable. Please try again.',
+        insights: [],
+        sources: { sessions: [], memories: [], tasks: [] },
+        provider: 'gemini'
+      };
+    }
   }
+
+  // Unknown provider fallback
+  const fallbackReply = generateDevelopmentResponse(message, intelligentContext);
+  return {
+    message: fallbackReply,
+    insights: [],
+    sources: buildSources(intelligentContext),
+    provider: 'development'
+  };
 };
 
 /**
@@ -272,7 +554,7 @@ const generateResponse = async (message, context) => {
  * @param {Object} param0 
  * @param {string} param0.userId - Authenticated user UUID
  * @param {string} param0.message - User query
- * @returns {Promise<{ message: string, sources: Object, provider: string }>}
+ * @returns {Promise<{ message: string, insights?: Array<string>, sources: Object, provider: string }>}
  */
 const processChat = async ({ userId, message }) => {
   const context = await getUserContext(userId);
@@ -282,6 +564,10 @@ const processChat = async ({ userId, message }) => {
 
 module.exports = {
   getUserContext,
+  selectIntelligentContext,
+  generateDevelopmentResponse,
+  generateGeminiCompletion,
+  buildSources,
   generateResponse,
   processChat
 };
