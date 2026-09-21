@@ -95,3 +95,79 @@ export const formatSessionDate = (dateVal) => {
 
   return `${dateStr} · ${timeStr}`;
 };
+
+/**
+ * Check if a task is overdue
+ * @param {string|Date|null} dueDate 
+ * @param {boolean} completed 
+ * @returns {boolean}
+ */
+export const isTaskOverdue = (dueDate, completed = false) => {
+  if (!dueDate || completed) return false;
+  const due = new Date(dueDate).getTime();
+  if (isNaN(due)) return false;
+  return due < Date.now();
+};
+
+/**
+ * Format task due date into human readable text
+ * @param {string|Date|null} dueDate 
+ * @returns {string|null}
+ */
+export const formatTaskDueDate = (dueDate) => {
+  if (!dueDate) return null;
+  const date = new Date(dueDate);
+  if (isNaN(date.getTime())) return null;
+
+  const now = new Date();
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow =
+    date.getDate() === tomorrow.getDate() &&
+    date.getMonth() === tomorrow.getMonth() &&
+    date.getFullYear() === tomorrow.getFullYear();
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    date.getDate() === yesterday.getDate() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getFullYear() === yesterday.getFullYear();
+
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const hasSpecificTime = !(hours === 0 && minutes === 0);
+  const timeStr = hasSpecificTime
+    ? ` · ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : '';
+
+  if (isToday) return `Today${timeStr}`;
+  if (isTomorrow) return `Tomorrow${timeStr}`;
+  if (isYesterday) return `Yesterday${timeStr}`;
+
+  return date.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+  }) + timeStr;
+};
+
+/**
+ * Format estimated minutes to human-readable duration
+ * @param {number|null} mins 
+ * @returns {string|null}
+ */
+export const formatEstimatedMinutes = (mins) => {
+  if (mins === null || mins === undefined || isNaN(mins) || mins <= 0) return null;
+  const hours = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  if (hours > 0 && remainingMins > 0) return `${hours}h ${remainingMins}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainingMins}m`;
+};
+

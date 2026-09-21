@@ -136,8 +136,39 @@ class ApiClient {
     }
     return this.post('/ai/chat', payload);
   }
+
+  // Productivity Tasks Methods
+  getTasks(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.get(`/tasks${query ? `?${query}` : ''}`);
+  }
+
+  getTask(id) {
+    return this.get(`/tasks/${id}`);
+  }
+
+  createTask(taskData) {
+    return this.post('/tasks', taskData);
+  }
+
+  updateTask(id, taskData) {
+    return this.patch(`/tasks/${id}`, taskData);
+  }
+
+  completeTask(id) {
+    return this.patch(`/tasks/${id}/complete`);
+  }
+
+  incompleteTask(id) {
+    return this.patch(`/tasks/${id}/incomplete`);
+  }
+
+  deleteTask(id) {
+    return this.delete(`/tasks/${id}`);
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);
 export default api;
+
 

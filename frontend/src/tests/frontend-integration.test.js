@@ -479,6 +479,170 @@ async function runFrontendIntegrationTests() {
     const t29Passed = deleteConvoRes.status === 200 && deleteConvoRes.body.success === true;
     record(29, 'Delete conversation -> 200', t29Passed, `Status: ${deleteConvoRes.status}`);
 
+    // ------------------------------------------------------------------------
+    // Test 30: Frontend serves /tasks application route -> 200
+    // ------------------------------------------------------------------------
+    const tasksRouteRes = await request('http://localhost:5173/tasks');
+    const t30Passed = tasksRouteRes.status === 200 && tasksRouteRes.raw.includes('<!doctype html>');
+    record(30, 'Frontend serves /tasks application route -> 200', t30Passed, `Status: ${tasksRouteRes.status}`);
+
+    // ------------------------------------------------------------------------
+    // Test 31: Authenticated user loads initially empty tasks queue -> 200
+    // ------------------------------------------------------------------------
+    const emptyTasksRes = await request('http://localhost:5000/api/tasks', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t31Passed =
+      emptyTasksRes.status === 200 &&
+      emptyTasksRes.body.success === true &&
+      Array.isArray(emptyTasksRes.body.tasks) &&
+      emptyTasksRes.body.tasks.length === 0;
+    record(31, 'Load empty tasks queue (Empty State ready) -> 200', t31Passed, `Tasks count: ${emptyTasksRes.body?.tasks?.length}`);
+
+    // ------------------------------------------------------------------------
+    // Test 32: Create new high-priority productivity task -> 201
+    // ------------------------------------------------------------------------
+    const createTaskRes = await request('http://localhost:5000/api/tasks', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: {
+        title: 'Review Haven C Long Vod',
+        description: 'Analyze duel positioning, sniper line concede timing, and smoke execution.',
+        priority: 'high',
+        estimatedMinutes: 45,
+        dueDate: new Date(Date.now() + 86400000).toISOString()
+      }
+    });
+    const createdTask = createTaskRes.body?.task;
+    const t32Passed =
+      createTaskRes.status === 201 &&
+      createTaskRes.body.success === true &&
+      Boolean(createdTask?.id) &&
+      createdTask.title === 'Review Haven C Long Vod' &&
+      createdTask.priority === 'high' &&
+      createdTask.estimatedMinutes === 45 &&
+      createdTask.completed === false;
+    record(32, 'Create high-priority productivity task -> 201', t32Passed, `Task ID: ${createdTask?.id}`);
+
+    // ------------------------------------------------------------------------
+    // Test 33: Create second medium-priority task -> 201
+    // ------------------------------------------------------------------------
+    const createSecondTaskRes = await request('http://localhost:5000/api/tasks', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: {
+        title: 'Complete Math Calculus Homework',
+        description: 'Chapter 5 integration exercises.',
+        priority: 'medium',
+        estimatedMinutes: 60
+      }
+    });
+    const secondTask = createSecondTaskRes.body?.task;
+    const t33Passed =
+      createSecondTaskRes.status === 201 &&
+      createSecondTaskRes.body.success === true &&
+      Boolean(secondTask?.id) &&
+      secondTask.priority === 'medium';
+    record(33, 'Create second medium-priority task -> 201', t33Passed, `Task ID: ${secondTask?.id}`);
+
+    // ------------------------------------------------------------------------
+    // Test 34: Retrieve tasks list populated with real database tasks -> 200
+    // ------------------------------------------------------------------------
+    const listTasksRes = await request('http://localhost:5000/api/tasks', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t34Passed =
+      listTasksRes.status === 200 &&
+      listTasksRes.body.success === true &&
+      Array.isArray(listTasksRes.body.tasks) &&
+      listTasksRes.body.tasks.length === 2;
+    record(34, 'Retrieve task list with real database items -> 200', t34Passed, `Found ${listTasksRes.body?.tasks?.length} tasks`);
+
+    // ------------------------------------------------------------------------
+    // Test 35: Mark task as completed -> 200
+    // ------------------------------------------------------------------------
+    const completeRes = await request(`http://localhost:5000/api/tasks/${createdTask?.id}/complete`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t35Passed =
+      completeRes.status === 200 &&
+      completeRes.body.success === true &&
+      completeRes.body.task?.completed === true;
+    record(35, 'Mark task as completed (PATCH /complete) -> 200', t35Passed, `Completed: ${completeRes.body?.task?.completed}`);
+
+    // ------------------------------------------------------------------------
+    // Test 36: Mark task as incomplete (undo completion) -> 200
+    // ------------------------------------------------------------------------
+    const incompleteRes = await request(`http://localhost:5000/api/tasks/${createdTask?.id}/incomplete`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t36Passed =
+      incompleteRes.status === 200 &&
+      incompleteRes.body.success === true &&
+      incompleteRes.body.task?.completed === false;
+    record(36, 'Mark task as incomplete (PATCH /incomplete) -> 200', t36Passed, `Completed: ${incompleteRes.body?.task?.completed}`);
+
+    // ------------------------------------------------------------------------
+    // Test 37: Edit task details (PATCH /api/tasks/:id) -> 200
+    // ------------------------------------------------------------------------
+    const editRes = await request(`http://localhost:5000/api/tasks/${createdTask?.id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: {
+        title: 'Review Haven C Long & Ascent Mid VODs',
+        estimatedMinutes: 50,
+        priority: 'high'
+      }
+    });
+    const t37Passed =
+      editRes.status === 200 &&
+      editRes.body.success === true &&
+      editRes.body.task?.title === 'Review Haven C Long & Ascent Mid VODs' &&
+      editRes.body.task?.estimatedMinutes === 50;
+    record(37, 'Edit task fields (PATCH /api/tasks/:id) -> 200', t37Passed, `Updated Title: "${editRes.body?.task?.title}"`);
+
+    // ------------------------------------------------------------------------
+    // Test 38: Filter tasks by priority & completion status -> 200
+    // ------------------------------------------------------------------------
+    const highFilterRes = await request('http://localhost:5000/api/tasks?priority=high&completed=false', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t38Passed =
+      highFilterRes.status === 200 &&
+      highFilterRes.body.success === true &&
+      highFilterRes.body.tasks.every((t) => t.priority === 'high' && t.completed === false);
+    record(38, 'Filter tasks by priority & active status -> 200', t38Passed, `Matched ${highFilterRes.body?.tasks?.length} high priority active task(s)`);
+
+    // ------------------------------------------------------------------------
+    // Test 39: Task validation error on invalid input -> 400
+    // ------------------------------------------------------------------------
+    const invalidTaskRes = await request('http://localhost:5000/api/tasks', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { title: '   ' }
+    });
+    const t39Passed = invalidTaskRes.status === 400 && invalidTaskRes.body.success === false;
+    record(39, 'Task API rejects invalid/empty payload -> 400', t39Passed, `Message: ${invalidTaskRes.body?.message}`);
+
+    // ------------------------------------------------------------------------
+    // Test 40: Delete task (DELETE /api/tasks/:id) -> 200
+    // ------------------------------------------------------------------------
+    const deleteTaskRes = await request(`http://localhost:5000/api/tasks/${createdTask?.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const verifyListRes = await request('http://localhost:5000/api/tasks', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t40Passed =
+      deleteTaskRes.status === 200 &&
+      deleteTaskRes.body.success === true &&
+      verifyListRes.body?.tasks?.length === 1 &&
+      !verifyListRes.body.tasks.some((t) => t.id === createdTask?.id);
+    record(40, 'Delete task and verify removal from database -> 200', t40Passed, `Remaining tasks: ${verifyListRes.body?.tasks?.length}`);
+
 
     // Clean up test user & game in PostgreSQL
     console.log('\n--- CLEANING UP TEST DATA ---');
