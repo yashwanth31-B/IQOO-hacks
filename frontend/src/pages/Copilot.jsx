@@ -31,6 +31,17 @@ export const Copilot = () => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading, isLoadingMessages]);
 
+  // Close mobile sidebar on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSidebarOpen]);
+
   // Load user conversations
   const loadConversations = useCallback(async () => {
     try {
@@ -254,6 +265,8 @@ export const Copilot = () => {
             className="mobile-history-toggle"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             title="Toggle Conversation History"
+            aria-label="Toggle Conversation History"
+            aria-expanded={isSidebarOpen}
           >
             💬 History {conversations.length > 0 && `(${conversations.length})`}
           </button>
@@ -271,12 +284,24 @@ export const Copilot = () => {
           <div
             className="sidebar-backdrop"
             onClick={() => setIsSidebarOpen(false)}
+            aria-hidden="true"
           />
         )}
 
         {/* Conversation History Sidebar */}
         <aside className={`copilot-history-sidebar ${isSidebarOpen ? 'sidebar-open' : ''}`}>
           <div className="sidebar-top-action">
+            <div className="mobile-history-sidebar-header">
+              <span className="mobile-history-sidebar-title">Conversations</span>
+              <button
+                type="button"
+                className="mobile-history-close-btn"
+                onClick={() => setIsSidebarOpen(false)}
+                aria-label="Close history sidebar"
+              >
+                ✕
+              </button>
+            </div>
             <button
               className="btn-new-chat"
               onClick={handleStartNewChat}
