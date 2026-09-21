@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaming Second Brain — AI Memory & Performance Copilot</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Custom Cyber HUD CSS -->
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-[#070a13] text-slate-100 min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950 font-sans">
+
+  <!-- =====================================================================
+       1. TOP HEADER & STATUS BAR
+       ===================================================================== -->
+  <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
+      
+      <!-- Title & Subtitle -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 ring-1 ring-white/20">
+          <i data-lucide="brain" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-display font-bold text-lg text-white tracking-wider">GAMING SECOND BRAIN</h1>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-bold tracking-widest">COCKPIT HUD</span>
+          </div>
+          <p class="text-xs text-slate-400 font-medium tracking-wide">
+            AI Memory & Performance Copilot <span class="text-slate-600">•</span> <span class="text-slate-500">AI Gaming Copilot Memory Layer</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Top Status Bar -->
+      <div class="flex flex-wrap items-center gap-2 text-xs font-mono">
+        <!-- Current Game -->
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 uppercase text-[10px]">GAME:</span>
+          <span id="status-game-pill" class="text-cyan-400 font-bold">BGMI</span>
+        </div>
+
+        <!-- Current Map -->
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 uppercase text-[10px]">MAP:</span>
+          <span id="status-map-pill" class="text-slate-200 font-semibold">Erangel</span>
+        </div>
+
+        <!-- Session Status -->
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 uppercase text-[10px]">SESSION:</span>
+          <span id="status-session-pill" class="text-emerald-400 font-bold flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> READY
+          </span>
+        </div>
+
+        <!-- AI Status -->
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 uppercase text-[10px]">AI:</span>
+          <span id="status-ai-pill" class="text-purple-400 font-bold flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-purple-400 live-pulse"></span> AI READY
+          </span>
+        </div>
+
+        <!-- Latency Badge -->
+        <div id="status-latency-badge" class="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-[11px] text-cyan-300">
+          <i data-lucide="zap" class="w-3.5 h-3.5 text-cyan-400"></i>
+          <span id="plan-latency-text">&lt; 100ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden compatibility markers for demo flow and lifecycle buttons -->
+    <div class="hidden" aria-hidden="true">
+      <button id="flow-step-detect"></button>
+      <button id="flow-step-start"></button>
+      <button id="flow-step-play"></button>
+      <button id="flow-step-remember"></button>
+      <button id="flow-step-ask"></button>
+      <button id="flow-step-analyze"></button>
+      <button id="flow-step-plan"></button>
+      <button id="btn-run-demo-flow"></button>
+      <button id="btn-lifecycle-start-gaming"></button>
+      <button id="btn-lifecycle-start-session"></button>
+      <button id="btn-lifecycle-end-session"></button>
+      <button id="btn-lifecycle-post-match"></button>
+    </div>
+  </header>
+
+  <!-- =====================================================================
+       MAIN COCKPIT CONTAINER
+       ===================================================================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Active Banner Notification -->
+    <div id="cockpit-banner" class="hidden p-4 rounded-xl border flex items-center justify-between text-sm transition-all duration-300">
+      <div class="flex items-center gap-3">
+        <i id="banner-icon" data-lucide="info" class="w-5 h-5"></i>
+        <span id="banner-message" class="font-medium"></span>
+      </div>
+      <button id="banner-close" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+
+    <!-- =====================================================================
+         0. PRE-GAME INTELLIGENCE HERO SECTION (PHASE 13 UPGRADE)
+         Flow: GAME OPENED -> IDENTIFY PLAYER EXPERIENCE -> DETECT GAME ->
+               DETECT MAP -> LOAD MAP INTELLIGENCE -> LOAD PLAYER HISTORY ->
+               GENERATE 3-SECOND PRE-GAME PLAN -> SHOW STRATEGY + MAP AREAS + LOADOUT -> START SESSION
+         ===================================================================== -->
+    <section id="pregame-intelligence-section" class="space-y-4">
+
+      <!-- 1. PLAYER EXPERIENCE & GREETING BANNER -->
+      <div class="glass-panel p-5 relative border-slate-800/80 hover:border-cyan-500/30 overflow-hidden">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-purple-600/20 border border-cyan-500/40 flex items-center justify-center text-xl">
+              🎮
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 id="pregame-player-greeting" class="font-display font-bold text-base text-white tracking-wide">
+                  Welcome back, Manoj
+                </h2>
+                <span id="pregame-player-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  RETURNING PLAYER
+                </span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                  SOURCE: <span id="pregame-player-source-tag" class="text-cyan-400 font-semibold">PERSONAL HISTORY</span>
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 font-mono mt-0.5">
+                Pre-Game Intelligence grounded in verified game data & stored session telemetry.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3 text-xs font-mono">
+            <div class="px-3 py-1.5 rounded-lg bg-slate-950/80 border border-slate-800">
+              <span class="text-slate-500 text-[10px] block uppercase">GAME STATUS</span>
+              <span class="text-emerald-400 font-bold flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> GAME OPENED
+              </span>
+            </div>
+            <div class="px-3 py-1.5 rounded-lg bg-slate-950/80 border border-slate-800">
+              <span class="text-slate-500 text-[10px] block uppercase">PRE-GAME LATENCY</span>
+              <span id="pregame-generation-time" class="text-cyan-400 font-bold">~35ms (&lt; 3s Target)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Experience Profile Detail Message Box -->
+        <div class="mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 font-mono text-xs flex items-start justify-between gap-4">
+          <div>
+            <span id="pregame-welcome-header" class="text-xs font-bold text-cyan-300 block mb-1">👋 WELCOME BACK</span>
+            <pre id="pregame-player-message" class="text-slate-300 whitespace-pre-wrap font-sans text-xs leading-relaxed">You've played BGMI 18 times.
+Last recorded session: K/D 1.8
+⚡ Your previous gaming memory is ready.</pre>
+          </div>
+          <div class="hidden sm:flex flex-col items-end gap-1 shrink-0 text-[11px] text-slate-500 font-mono">
+            <span>Audit: Zero Assumption Policy</span>
+            <span class="text-slate-600">History-backed Profile</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. MAIN PRE-GAME INTELLIGENCE + MAP VISUALIZATION GRID -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- PRE-GAME INTELLIGENCE COMPACT CARD (Cols 1-6) -->
+        <div class="lg:col-span-6 glass-panel p-5 relative border-slate-800/80 hover:border-cyan-500/30 flex flex-col justify-between">
+          <div class="space-y-3.5">
+            <!-- Header -->
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+                  <i data-lucide="crosshair" class="w-4 h-4 text-cyan-400"></i>
+                </div>
+                <div>
+                  <h3 class="font-display font-bold text-sm tracking-wider uppercase text-slate-100">
+                    PRE-GAME INTELLIGENCE
+                  </h3>
+                  <span id="pregame-header-game-map" class="text-xs font-mono text-cyan-400">BGMI • Erangel</span>
+                </div>
+              </div>
+              <span class="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950/60 border border-cyan-500/30 text-cyan-300">
+                AI COCKPIT
+              </span>
+            </div>
+
+            <!-- Structured Intelligence Sections matching Requirement 14 -->
+            <div class="space-y-2.5 text-xs font-sans">
+
+              <!-- Section: PLAYER -->
+              <div class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-start justify-between gap-2">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-purple-400 uppercase tracking-wider block">PLAYER</span>
+                  <span id="pregame-summary-player" class="text-slate-200 font-semibold block">Returning Player</span>
+                  <span id="pregame-summary-player-sub" class="text-[11px] text-slate-400 block font-mono">18 recorded sessions</span>
+                </div>
+                <span class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800 shrink-0">
+                  PERSONAL HISTORY
+                </span>
+              </div>
+
+              <!-- Section: START -->
+              <div class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-start justify-between gap-2">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider block">START</span>
+                  <span id="pregame-summary-start-title" class="text-slate-200 font-semibold block">Lower-risk area (Gatka)</span>
+                  <p id="pregame-summary-start-why" class="text-[11px] text-slate-400 leading-tight mt-0.5">Historically lower activity with sufficient loot.</p>
+                </div>
+                <span id="pregame-summary-start-risk-badge" class="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
+                  RISK: LOW
+                </span>
+              </div>
+
+              <!-- Section: AVOID / HIGH ACTIVITY -->
+              <div class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-start justify-between gap-2">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-rose-400 uppercase tracking-wider block">AVOID / HIGH ACTIVITY</span>
+                  <span id="pregame-summary-avoid-title" class="text-slate-200 font-semibold block">Historically high-activity area</span>
+                  <p id="pregame-summary-avoid-desc" class="text-[11px] text-slate-400 leading-tight mt-0.5">School &amp; Apartments, Sosnovka Military Base, Pochinki</p>
+                </div>
+                <span class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800 shrink-0">
+                  GAME DATA
+                </span>
+              </div>
+
+              <!-- Section: LOADOUT -->
+              <div class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-start justify-between gap-2">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-wider block">LOADOUT</span>
+                  <span id="pregame-summary-loadout-title" class="text-slate-200 font-semibold block">PRIMARY: M416 • SECONDARY: UMP45</span>
+                  <p id="pregame-summary-loadout-why" class="text-[11px] text-slate-400 leading-tight mt-0.5">Your recorded sessions show stronger performance when using this weapon.</p>
+                </div>
+                <span id="pregame-summary-loadout-source-badge" class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shrink-0">
+                  PERSONAL HISTORY
+                </span>
+              </div>
+
+              <!-- Section: ROTATION -->
+              <div class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-start justify-between gap-2">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider block">ROTATION</span>
+                  <span id="pregame-summary-rotation-title" class="text-slate-200 font-semibold block">Covered route → safer transition</span>
+                  <p id="pregame-summary-rotation-desc" class="text-[11px] text-slate-400 leading-tight mt-0.5">START: Gatka → MID GAME: Covered Ridge Route → NEXT: Zone Edge</p>
+                </div>
+                <span class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800 shrink-0">
+                  GAME DATA
+                </span>
+              </div>
+
+              <!-- Section: TODAY'S FOCUS -->
+              <div class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-start justify-between gap-2">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-purple-300 uppercase tracking-wider block">TODAY'S FOCUS</span>
+                  <span id="pregame-summary-focus-title" class="text-slate-200 font-semibold block">Rotation decisions</span>
+                </div>
+                <span class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800 shrink-0">
+                  AI ANALYSIS
+                </span>
+              </div>
+
+              <!-- Section: QUICK STRATEGY -->
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-mono font-bold text-cyan-300 uppercase tracking-wider block">QUICK STRATEGY</span>
+                  <span class="text-[9px] font-mono text-slate-500 uppercase">AI ANALYSIS</span>
+                </div>
+                <ol id="pregame-summary-quick-strategy-list" class="space-y-1 text-slate-300 font-sans text-xs">
+                  <li class="flex items-center gap-2">
+                    <span class="text-cyan-400 font-mono font-bold">1.</span>
+                    <span>Prioritize covered routes</span>
+                  </li>
+                  <li class="flex items-center gap-2">
+                    <span class="text-cyan-400 font-mono font-bold">2.</span>
+                    <span>Secure useful loot</span>
+                  </li>
+                  <li class="flex items-center gap-2">
+                    <span class="text-cyan-400 font-mono font-bold">3.</span>
+                    <span>Rotate before high-risk zones</span>
+                  </li>
+                </ol>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- START SESSION PRIMARY CTA -->
+          <div class="pt-4 mt-3 border-t border-slate-800/80">
+            <button id="btn-pregame-start-session" class="btn-cyber w-full py-2.5 justify-center text-sm font-bold tracking-wide">
+              <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+              <span>START SESSION</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- MAP VISUALIZATION & AREA INTELLIGENCE PANEL (Cols 7-12) -->
+        <div class="lg:col-span-6 glass-panel p-5 relative border-slate-800/80 hover:border-purple-500/30 flex flex-col justify-between">
+          <div class="space-y-3.5">
+            <!-- Header -->
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                  <i data-lucide="map" class="w-4 h-4 text-emerald-400"></i>
+                </div>
+                <div>
+                  <h3 class="font-display font-bold text-sm tracking-wider uppercase text-slate-100">
+                    MAP INTELLIGENCE &amp; RADAR
+                  </h3>
+                  <span id="pregame-map-subheading" class="text-xs font-mono text-emerald-400">Erangel • CONFIRMED</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="pregame-map-status-pill" class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  CONFIRMED
+                </span>
+              </div>
+            </div>
+
+            <!-- SVG Vector Radar Map Visualization (Requirement 15) -->
+            <div class="relative w-full h-64 bg-[#050811] rounded-xl border border-slate-800 overflow-hidden shadow-inner flex items-center justify-center">
+              
+              <!-- Radar sweep effect overlay -->
+              <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(6,182,212,0.06)_0%,_transparent_70%)] pointer-events-none"></div>
+
+              <!-- Topographic Grid lines -->
+              <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <pattern id="radar-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#38bdf8" stroke-width="0.5"/>
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#radar-grid)" />
+                <circle cx="50%" cy="50%" r="28%" fill="none" stroke="#38bdf8" stroke-dasharray="3,3" stroke-width="0.75" />
+                <circle cx="50%" cy="50%" r="44%" fill="none" stroke="#38bdf8" stroke-dasharray="3,3" stroke-width="0.5" />
+              </svg>
+
+              <!-- Dynamic Map SVG Canvas -->
+              <svg id="pregame-map-svg-canvas" class="w-full h-full relative z-10" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <!-- Polyline Rotation route -->
+                <polyline id="map-route-polyline" points="31,48 40,43 48,52" fill="none" stroke="#00f2fe" stroke-width="1.2" stroke-dasharray="2,2" class="animate-pulse" />
+                
+                <!-- Area markers will be injected dynamically by JS -->
+                <g id="map-markers-group"></g>
+              </svg>
+
+              <!-- Clean Placeholder when Map is Unindexed or Unknown -->
+              <div id="pregame-map-placeholder" class="hidden absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center space-y-2 z-20">
+                <i data-lucide="map-pin-off" class="w-8 h-8 text-slate-500"></i>
+                <p class="text-xs font-mono text-slate-300">MAP NOT DETECTED</p>
+                <span class="text-[11px] text-slate-500">No verified map telemetry available for this session.</span>
+                <button id="btn-select-map-prompt" class="btn-secondary text-xs py-1.5 px-3 mt-2 font-mono">
+                  [ SELECT MAP ]
+                </button>
+              </div>
+            </div>
+
+            <!-- Legend Overlay -->
+            <div class="flex flex-wrap items-center justify-between text-[10px] font-mono text-slate-400 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 gap-1.5">
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shadow-sm shadow-emerald-400/50"></span>
+                <span>🟢 Lower activity</span>
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-sm shadow-amber-400/50"></span>
+                <span>🟡 Medium</span>
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block shadow-sm shadow-rose-400/50"></span>
+                <span>🔴 High activity</span>
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded bg-cyan-400 inline-block"></span>
+                <span>🔷 Rotation route</span>
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="text-amber-300">⭐</span>
+                <span>Objective</span>
+              </span>
+            </div>
+
+            <!-- Area Inspector Box (Selected / Hovered Area Details) -->
+            <div id="pregame-area-inspector" class="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 font-mono text-xs space-y-1">
+              <div class="flex items-center justify-between">
+                <span id="inspect-area-name" class="font-bold text-slate-200">Gatka</span>
+                <span id="inspect-area-risk" class="text-[10px] font-bold text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10">RISK: LOW</span>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-[10px] text-slate-400 pt-1">
+                <div>Activity: <span id="inspect-area-activity" class="text-slate-200 font-semibold">Low</span></div>
+                <div>Loot: <span id="inspect-area-loot" class="text-slate-200 font-semibold">Medium</span></div>
+                <div>Vehicle: <span id="inspect-area-vehicle" class="text-slate-200 font-semibold">Medium</span></div>
+              </div>
+              <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-800/60 flex items-center justify-between">
+                <span>Evidence: <span id="inspect-area-evidence">Historically lower recorded enemy activity.</span></span>
+                <span class="text-cyan-400 shrink-0 ml-2">Conf: 94%</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- =====================================================================
+         ROW 1: GAME DETECTION + 3-SECOND AI PRE-GAME PLAN
+         ===================================================================== -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- 2. GAME DETECTION CARD (Cols 1-5) -->
+      <div class="lg:col-span-5 glass-panel p-5 relative overflow-hidden flex flex-col justify-between border-slate-800/80 hover:border-cyan-500/30">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+                <i data-lucide="radar" class="w-4 h-4 text-cyan-400"></i>
+              </div>
+              <h2 class="font-display font-bold text-sm tracking-wider uppercase text-slate-200">GAME DETECTED</h2>
+            </div>
+            <span id="detection-confirmed-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+              <i data-lucide="check" class="w-3 h-3"></i> CONFIRMED
+            </span>
+          </div>
+
+          <!-- Detected Attributes -->
+          <div class="grid grid-cols-3 gap-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800/60 font-mono">
+            <div>
+              <span class="text-[10px] text-slate-500 uppercase block font-medium">GAME</span>
+              <span id="card-game-name" class="text-base font-bold text-cyan-400 block truncate">BGMI</span>
+              <span id="hud-game-val" class="hidden">BGMI</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 uppercase block font-medium">MAP</span>
+              <span id="card-map-name" class="text-base font-bold text-white block truncate">Erangel</span>
+              <span id="hud-map-val" class="hidden">Erangel</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 uppercase block font-medium">MODE</span>
+              <span id="card-mode-name" class="text-base font-bold text-purple-400 block truncate">Classic</span>
+              <span id="hud-mode-val" class="hidden">Classic</span>
+            </div>
+          </div>
+
+          <!-- Fast Switcher Presets -->
+          <div>
+            <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-2 font-semibold">QUICK DETECT PRESETS:</span>
+            <div class="grid grid-cols-3 gap-2 text-xs font-mono">
+              <button class="preset-btn px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500 hover:text-cyan-300 transition-all text-center truncate" data-game="BGMI" data-map="Erangel" data-mode="Classic">
+                BGMI (Erangel)
+              </button>
+              <button class="preset-btn px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500 hover:text-cyan-300 transition-all text-center truncate" data-game="Valorant" data-map="Ascent" data-mode="Competitive">
+                Valorant (Ascent)
+              </button>
+              <button class="preset-btn px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500 hover:text-cyan-300 transition-all text-center truncate" data-game="Free Fire" data-map="Bermuda" data-mode="Battle Royale">
+                Free Fire (Bermuda)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card Actions -->
+        <div class="pt-5 flex items-center gap-3 border-t border-slate-800/80 mt-4">
+          <button id="btn-confirm-detection" class="btn-secondary flex-1 text-xs py-2 justify-center">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+            <span>CONFIRM DETECTION</span>
+          </button>
+          <button id="btn-start-session-primary" class="btn-cyber flex-1 text-xs py-2 justify-center">
+            <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+            <span>START SESSION</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. 3-SECOND AI PRE-GAME PLAN CARD (Cols 6-12) -->
+      <div id="plan-card-container" class="lg:col-span-7 glass-panel p-5 relative overflow-hidden flex flex-col justify-between border-slate-800/80 hover:border-purple-500/30">
+        
+        <!-- Header -->
+        <div>
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                <i data-lucide="sparkles" class="w-4 h-4 text-purple-400"></i>
+              </div>
+              <div>
+                <h2 id="plan-label-heading" class="font-display font-bold text-sm tracking-wider uppercase text-slate-200">
+                  AI PRE-GAME PLAN <span class="text-slate-500 text-[10px] font-mono ml-1 font-normal">(AI GAMING PLAN)</span>
+                </h2>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="plan-latency-pill" class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                ⚡ ~3s Target (Fast Plan)
+              </span>
+              <button id="btn-refresh-plan" class="p-1 rounded text-slate-400 hover:text-white transition-colors" title="Regenerate Fast Plan">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Insufficient Data Alert Notice (Hidden by default) -->
+          <div id="plan-insufficient-data-alert" class="hidden mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+            <div>
+              <strong class="font-semibold block font-mono text-[11px] uppercase" id="alert-notice-title">LIMITED DATA</strong>
+              <span id="alert-notice-msg">Not enough data to create a personalized strategy yet. We'll learn from this session.</span>
+            </div>
+          </div>
+
+          <!-- Plan Focus & Schedule Breakdown -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2.5 mb-4">
+            <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 font-mono">
+              <span class="text-[10px] text-slate-500 uppercase block font-semibold">TODAY'S FOCUS</span>
+              <span id="plan-focus-area" class="text-xs font-bold text-purple-300 block truncate">Rotation Decisions</span>
+              <span id="plan-focus-val" class="hidden">Rotation Decisions</span>
+              <span id="plan-goal-val" class="hidden">Improve rotation decisions</span>
+            </div>
+            <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 font-mono">
+              <span class="text-[10px] text-slate-500 uppercase block font-semibold">SESSION</span>
+              <span id="plan-session-duration" class="text-xs font-bold text-white block">60 min</span>
+              <span id="plan-duration-val" class="hidden">60 min</span>
+            </div>
+            <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 font-mono">
+              <span class="text-[10px] text-slate-500 uppercase block font-semibold">WARM-UP / GAMEPLAY</span>
+              <span id="plan-warmup-gameplay" class="text-xs font-bold text-cyan-400 block truncate">10m / 40m</span>
+              <span id="plan-practice-val" class="hidden">10 min</span>
+              <span id="plan-gameplay-val" class="hidden">40 min</span>
+            </div>
+            <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 font-mono">
+              <span class="text-[10px] text-slate-500 uppercase block font-semibold">REVIEW</span>
+              <span id="plan-review-duration" class="text-xs font-bold text-emerald-400 block">10 min</span>
+              <span id="plan-review-val" class="hidden">10 min</span>
+            </div>
+          </div>
+
+          <!-- Quick Strategy (3-5 Actions) -->
+          <div class="space-y-2 mb-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <i data-lucide="crosshair" class="w-3.5 h-3.5 text-cyan-400"></i> QUICK STRATEGY
+              </span>
+              <span class="text-[10px] font-mono text-slate-500 font-medium">3-5 Tactical Directives</span>
+            </div>
+            <ol id="plan-strategy-list" class="space-y-2 text-xs text-slate-300 bg-slate-950/40 p-3.5 rounded-xl border border-slate-800/80 font-sans">
+              <li class="flex items-start gap-2.5">
+                <span class="w-4 h-4 rounded bg-cyan-500/20 text-cyan-400 font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                <span>Prioritize covered rotations along ridge lines and compound compounds.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <span class="w-4 h-4 rounded bg-cyan-500/20 text-cyan-400 font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                <span>Avoid unnecessary open-area crossings between major settlements without smoke cover.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <span class="w-4 h-4 rounded bg-cyan-500/20 text-cyan-400 font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                <span>Review rotation-related deaths immediately after the match.</span>
+              </li>
+            </ol>
+          </div>
+
+          <!-- 7. Expandable Plan Evidence: WHY THIS PLAN? -->
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/30 overflow-hidden text-xs">
+            <button id="btn-toggle-evidence" class="w-full px-3.5 py-2.5 flex items-center justify-between text-slate-400 hover:text-cyan-300 font-mono transition-colors">
+              <span class="flex items-center gap-2 font-semibold">
+                <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-cyan-400"></i> WHY THIS PLAN? (FACTUAL EVIDENCE)
+              </span>
+              <span class="flex items-center gap-1 text-[11px] text-slate-500">
+                <span id="evidence-count-badge">Based on 3 sessions</span>
+                <i id="evidence-chevron" data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200"></i>
+              </span>
+            </button>
+            <div id="evidence-expandable-body" class="hidden px-3.5 pb-3 pt-1 border-t border-slate-800/60 space-y-2">
+              <div id="evidence-items-container" class="space-y-1.5 font-sans">
+                <!-- Dynamically populated evidence -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Plan Action Controls -->
+        <div class="pt-4 flex items-center justify-between border-t border-slate-800/80 mt-4 gap-3">
+          <button id="btn-start-plan" class="btn-secondary text-xs py-2 flex-1 justify-center">
+            <i data-lucide="list-checks" class="w-4 h-4 text-purple-400"></i>
+            <span>START PLAN (SHOW TASKS)</span>
+          </button>
+          <button id="btn-start-session-secondary" class="btn-cyber text-xs py-2 flex-1 justify-center">
+            <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+            <span>START SESSION</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         ROW 2: LIVE PERFORMANCE CARD & CURRENT TASK PROGRESSION
+         ===================================================================== -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- 9. LIVE PERFORMANCE CARD (Cols 1-6) -->
+      <div id="live-perf-container" class="lg:col-span-6 glass-panel p-5 relative border-slate-800/80 hover:border-cyan-500/30">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+              <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+            </div>
+            <div>
+              <h2 class="font-display font-bold text-sm tracking-wider uppercase text-slate-200">LIVE PERFORMANCE</h2>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="live-session-status-badge" class="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+              STANDBY
+            </span>
+          </div>
+        </div>
+
+        <!-- Live Metrics Grid: Only display existing metrics -->
+        <div class="grid grid-cols-5 gap-2.5 font-mono mb-4 text-center">
+          <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-500 uppercase block font-semibold">K/D</span>
+            <span id="live-metric-kd" class="text-lg font-extrabold text-cyan-400">1.8</span>
+            <span id="hud-kd-val" class="hidden">1.8</span>
+          </div>
+          <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-500 uppercase block font-semibold">KILLS</span>
+            <span id="live-metric-kills" class="text-lg font-extrabold text-emerald-400">18</span>
+          </div>
+          <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-500 uppercase block font-semibold">DEATHS</span>
+            <span id="live-metric-deaths" class="text-lg font-extrabold text-rose-400">10</span>
+          </div>
+          <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-500 uppercase block font-semibold">SCORE</span>
+            <span id="live-metric-score" class="text-lg font-extrabold text-purple-400">2450</span>
+            <span id="hud-result-val" class="hidden">Win</span>
+          </div>
+          <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-500 uppercase block font-semibold">TIME</span>
+            <span id="live-metric-time" class="text-lg font-extrabold text-amber-400">32:14</span>
+            <span id="hud-timer-val" class="hidden">32:14</span>
+          </div>
+        </div>
+
+        <!-- Telemetry Simulation & End Session Controls -->
+        <div class="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <button id="btn-sim-kill" class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-emerald-400 hover:bg-emerald-950/40 transition-colors" title="Record Kill">
+              + Kill
+            </button>
+            <button id="btn-sim-death" class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-rose-400 hover:bg-rose-950/40 transition-colors" title="Record Death">
+              + Death
+            </button>
+            <button id="btn-sim-assist" class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-cyan-400 hover:bg-cyan-950/40 transition-colors" title="Record Assist">
+              + Assist
+            </button>
+            <button id="btn-sim-score" class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-purple-400 hover:bg-purple-950/40 transition-colors" title="+150 Score">
+              + Score
+            </button>
+          </div>
+          <button id="btn-end-session" class="px-3.5 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 text-xs font-mono font-bold transition-all flex items-center gap-1.5">
+            <i data-lucide="square" class="w-3.5 h-3.5 fill-rose-400"></i> END SESSION
+          </button>
+        </div>
+      </div>
+
+      <!-- 14. CURRENT TASK / PLAN STEPPER (Cols 7-12) -->
+      <div id="plan-tasks-container" class="lg:col-span-6 glass-panel p-5 relative border-slate-800/80 hover:border-purple-500/30 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+                <i data-lucide="check-square" class="w-4 h-4 text-cyan-400"></i>
+              </div>
+              <div>
+                <h2 class="font-display font-bold text-sm tracking-wider uppercase text-slate-200">CURRENT TASK</h2>
+              </div>
+            </div>
+            <span id="plan-phase-pill" class="text-xs font-mono text-cyan-400 font-semibold">Active Objective</span>
+          </div>
+
+          <div class="space-y-3 font-sans">
+            <div class="flex items-center justify-between text-xs font-mono text-slate-400 pb-1">
+              <span id="current-task-focus-title" class="font-bold text-slate-200">Focus: Rotation Awareness</span>
+              <span id="plan-progress-percent" class="text-cyan-400 font-bold">1 of 3 Complete</span>
+            </div>
+
+            <!-- Task Checklist -->
+            <div class="space-y-2 text-xs">
+              <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 cursor-pointer hover:border-slate-700 transition-colors">
+                <input id="chk-task-warmup" type="checkbox" checked class="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-slate-700 focus:ring-0">
+                <div class="flex-1">
+                  <span class="font-semibold text-slate-200 block">Warm-up (10 min)</span>
+                  <span class="text-[11px] text-slate-400">Mechanical crosshair and recoil calibration.</span>
+                </div>
+                <span class="text-[10px] font-mono text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-500/10">DONE</span>
+              </label>
+
+              <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-950/60 border border-cyan-500/40 cursor-pointer hover:border-cyan-500 transition-colors">
+                <input id="chk-task-gameplay" type="checkbox" class="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-slate-700 focus:ring-0">
+                <div class="flex-1">
+                  <span class="font-semibold text-cyan-300 block">Gameplay (40 min)</span>
+                  <span class="text-[11px] text-slate-400">Competitive match prioritizing covered rotations.</span>
+                </div>
+                <span class="text-[10px] font-mono text-cyan-400 font-bold px-2 py-0.5 rounded bg-cyan-500/10 animate-pulse">IN PROGRESS</span>
+              </label>
+
+              <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 cursor-pointer hover:border-slate-700 transition-colors">
+                <input id="chk-task-review" type="checkbox" class="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-slate-700 focus:ring-0">
+                <div class="flex-1">
+                  <span class="font-semibold text-slate-300 block">Review (10 min)</span>
+                  <span class="text-[11px] text-slate-400">Post-match debrief of rotation deaths.</span>
+                </div>
+                <span class="text-[10px] font-mono text-slate-500 font-bold px-2 py-0.5 rounded bg-slate-900">NEXT</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-mono mt-3">
+          <span>Plan state: Adaptive</span>
+          <button id="btn-next-task" class="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1">
+            Advance Next Task <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         ROW 3: PERFORMANCE TREND & AI INSIGHTS
+         ===================================================================== -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- 12. PERFORMANCE TREND (Cols 1-7) -->
+      <div class="lg:col-span-7 glass-panel p-5 relative border-slate-800/80">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+              <i data-lucide="trending-up" class="w-4 h-4 text-cyan-400"></i>
+            </div>
+            <div>
+              <h2 class="font-display font-bold text-sm tracking-wider uppercase text-slate-200">PERFORMANCE TREND</h2>
+            </div>
+          </div>
+          <span class="text-xs font-mono text-slate-400">Metric: K/D Ratio & Combat Output</span>
+        </div>
+
+        <!-- Canvas Chart Container -->
+        <div class="h-56 relative w-full" id="chart-kd-trend">
+          <canvas id="performanceTrendChart"></canvas>
+          <div id="performance-trend-bars" class="hidden"></div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 font-mono mt-2">
+          <span>Grounded in stored SQLite session telemetry</span>
+          <span id="trend-session-count">Showing last 10 sessions</span>
+        </div>
+      </div>
+
+      <!-- 13. AI INSIGHT PANEL (Cols 8-12) -->
+      <div class="lg:col-span-5 glass-panel p-5 relative border-slate-800/80 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                <i data-lucide="lightbulb" class="w-4 h-4 text-amber-400"></i>
+              </div>
+              <h2 class="font-display font-bold text-sm tracking-wider uppercase text-slate-200">AI INSIGHTS</h2>
+            </div>
+            <span class="text-[10px] font-mono uppercase bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded font-bold">
+              CROSS-SESSION
+            </span>
+          </div>
+
+          <!-- Insights Container -->
+          <div id="ai-insights-list" class="space-y-3 text-xs">
+            <!-- Dynamically populated from Cross-Session Analysis patterns -->
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono mt-3">
+          <span class="text-slate-500">Evidence verified</span>
+          <button id="btn-view-all-patterns" class="text-cyan-400 hover:underline">View All Patterns →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         ROW 4: RECENT MEMORY (HORIZONTAL CARDS)
+         ===================================================================== -->
+    <section class="glass-panel p-5 relative border-slate-800/80">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+            <i data-lucide="clock" class="w-4 h-4 text-purple-400"></i>
+          </div>
+          <h2 class="font-display font-bold text-sm tracking-wider uppercase text-slate-200">RECENT MEMORIES</h2>
+        </div>
+        <span class="text-xs font-mono text-slate-400">Stored Episodic & Semantic Nodes</span>
+      </div>
+
+      <!-- Horizontal Cards Container -->
+      <div id="recent-memories-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <!-- Dynamically populated memory cards -->
+      </div>
+      <div id="dashboard-recent-memories" class="hidden"></div>
+    </section>
+
+    <!-- =====================================================================
+         ROW 5: ASK YOUR GAMING BRAIN (NATURAL LANGUAGE INTELLIGENCE)
+         ===================================================================== -->
+    <section class="glass-panel p-6 relative border-slate-800/80 hover:border-cyan-500/40">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center shadow-md shadow-cyan-500/30">
+            <i data-lucide="message-square" class="w-4 h-4 text-white"></i>
+          </div>
+          <div>
+            <h2 class="font-display font-bold text-sm tracking-wider uppercase text-white">ASK YOUR GAMING BRAIN</h2>
+            <p class="text-[11px] text-slate-400">Grounded cross-session performance questions and evidence lookup</p>
+          </div>
+        </div>
+        <span class="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded">
+          Phase 11 Intelligence
+        </span>
+      </div>
+
+      <!-- Search Input Area -->
+      <div class="space-y-3">
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5"></i>
+            <input 
+              id="intelligence-query-input"
+              type="text"
+              placeholder="When did I perform best?"
+              class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans"
+            >
+            <input id="input-ask-gaming-brain" type="hidden">
+          </div>
+          <button id="btn-ask-intelligence" class="btn-cyber text-xs py-2.5 px-5 shrink-0">
+            <i data-lucide="sparkles" class="w-4 h-4"></i> ASK AI
+          </button>
+          <button id="btn-ask-gaming-brain" class="hidden"></button>
+        </div>
+
+        <!-- Quick Question Chips -->
+        <div class="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+          <span class="text-slate-500 text-[10px] uppercase font-bold mr-1">SUGGESTIONS:</span>
+          <button class="query-chip px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-slate-700 transition-colors">
+            When did I perform best?
+          </button>
+          <button class="query-chip px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-slate-700 transition-colors">
+            What changed?
+          </button>
+          <button class="query-chip px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-slate-700 transition-colors">
+            Am I improving?
+          </button>
+          <button class="query-chip px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-slate-700 transition-colors">
+            Which map has my strongest recorded performance?
+          </button>
+          <button class="query-chip px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-slate-700 transition-colors">
+            What mistakes keep repeating?
+          </button>
+        </div>
+
+        <!-- Structured Intelligence Response Box (ANSWER, EVIDENCE, INSIGHT, RECOMMENDATION) -->
+        <div id="intelligence-response-box" class="hidden mt-4 p-4 rounded-xl bg-slate-950/90 border border-slate-800/80 space-y-3 font-sans text-xs">
+          <!-- Answer -->
+          <div>
+            <span class="font-mono text-[10px] font-bold text-cyan-400 uppercase tracking-wider block mb-1">ANSWER</span>
+            <p id="resp-answer-text" class="text-slate-200 text-sm font-medium leading-relaxed"></p>
+            <div id="brain-answer-val" class="hidden"></div>
+          </div>
+
+          <!-- Evidence -->
+          <div class="border-t border-slate-800/60 pt-2.5">
+            <span class="font-mono text-[10px] font-bold text-purple-400 uppercase tracking-wider block mb-1">EVIDENCE</span>
+            <ul id="resp-evidence-list" class="list-disc list-inside space-y-1 text-slate-300 font-mono text-[11px]"></ul>
+            <div id="brain-evidence-val" class="hidden"></div>
+          </div>
+
+          <!-- Insight -->
+          <div class="border-t border-slate-800/60 pt-2.5">
+            <span class="font-mono text-[10px] font-bold text-amber-400 uppercase tracking-wider block mb-1">INSIGHT</span>
+            <p id="resp-insight-text" class="text-slate-300 leading-relaxed"></p>
+            <div id="brain-insight-val" class="hidden"></div>
+          </div>
+
+          <!-- Recommendation -->
+          <div class="border-t border-slate-800/60 pt-2.5">
+            <span class="font-mono text-[10px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">RECOMMENDATION</span>
+            <p id="resp-recommendation-text" class="text-slate-300 leading-relaxed"></p>
+            <div id="brain-recommendation-val" class="hidden"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- =====================================================================
+       15. POST-SESSION MODAL
+       ===================================================================== -->
+  <div id="post-session-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="max-w-md w-full glass-panel p-6 border-slate-700 shadow-2xl relative space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            <i data-lucide="check-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-display font-bold text-sm tracking-wider uppercase text-emerald-400">SESSION COMPLETE</h3>
+            <span class="text-[11px] text-slate-400 font-mono">Performance recorded.</span>
+          </div>
+        </div>
+        <button id="btn-close-post-modal" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <!-- Update Confirmation -->
+      <div class="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-200">
+        <strong class="font-mono uppercase font-bold block mb-0.5 text-cyan-300">MEMORY UPDATED</strong>
+        Your session has been added to Gaming Second Brain.
+      </div>
+
+      <!-- Session Highlights -->
+      <div id="post-session-stats-grid" class="grid grid-cols-3 gap-2.5 font-mono text-center text-xs">
+        <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+          <span class="text-slate-500 block text-[10px]">K/D</span>
+          <span id="post-stat-kd" class="font-bold text-cyan-400 text-sm">--</span>
+        </div>
+        <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+          <span class="text-slate-500 block text-[10px]">DURATION</span>
+          <span id="post-stat-duration" class="font-bold text-white text-sm">--</span>
+        </div>
+        <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+          <span class="text-slate-500 block text-[10px]">RESULT</span>
+          <span id="post-stat-result" class="font-bold text-emerald-400 text-sm">Win</span>
+        </div>
+      </div>
+
+      <p id="post-session-summary-text" class="text-xs text-slate-300 leading-relaxed font-sans"></p>
+
+      <!-- Action Buttons -->
+      <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+        <button id="btn-view-analysis" class="btn-secondary text-xs py-2 flex-1 justify-center">
+          VIEW ANALYSIS
+        </button>
+        <button id="btn-next-plan" class="btn-cyber text-xs py-2 flex-1 justify-center">
+          NEXT GAMING PLAN
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/60 py-4 mt-8 text-center text-xs text-slate-500 font-mono">
+    <span>GAMING SECOND BRAIN • AI MEMORY &amp; PERFORMANCE COPILOT • PHASE 13 COCKPIT</span>
+  </footer>
+
+  <!-- App Scripts -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
