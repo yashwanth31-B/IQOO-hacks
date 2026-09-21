@@ -1,107 +1,203 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useSession } from '../hooks/useSession';
+import api from '../services/api';
+import { formatDuration } from '../utils/date.utils';
+
+import ActiveSessionCard from '../components/ActiveSessionCard';
+import StartSessionModal from '../components/StartSessionModal';
+import EndedSessionBanner from '../components/EndedSessionBanner';
 import HealthBadge from '../components/HealthBadge';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export const Dashboard = () => {
   const { user } = useAuth();
+  const { activeSession, loadingActive, fetchActiveSession } = useSession();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [sessionStats, setSessionStats] = useState({
+    totalSessions: 0,
+    totalDurationSeconds: 0,
+    loading: true
+  });
+
+  // Calculate real metrics from backend session records
+  const loadStats = useCallback(async () => {
+    try {
+      // Fetch up to 100 recent sessions to compute total time & count
+      const response = await api.get('/sessions?page=1&limit=100');
+      if (response && response.success) {
+        const list = response.sessions || [];
+        const totalDuration = list.reduce((acc, curr) => {
+          return acc + (Number(curr.duration) || 0);
+        }, 0);
+
+        setSessionStats({
+          totalSessions: response.pagination?.total ?? list.length,
+          totalDurationSeconds: totalDuration,
+          loading: false
+        });
+      }
+    } catch {
+      setSessionStats((prev) => ({ ...prev, loading: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats, activeSession]);
+
+  const handleSessionStarted = () => {
+    fetchActiveSession();
+    loadStats();
+  };
+
+  const handleSessionEnded = () => {
+    loadStats();
+  };
 
   return (
     <div className="page-container">
+      {/* 3. Dashboard Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Gaming Overview</h1>
-          <p className="page-subtitle">Welcome back, {user?.name || 'Player'}. Your gaming copilot status.</p>
+          <div className="header-eyebrow">
+            <span className="logo-symbol">⚔️</span> AI GAMING COPILOT
+          </div>
+          <h1 className="page-title">
+            {user?.name ? `Welcome back, ${user.name}` : 'Welcome, Player'}
+          </h1>
+          <p className="page-subtitle">Play smarter. Remember better. Improve faster.</p>
         </div>
         <div className="page-actions">
           <HealthBadge />
         </div>
       </div>
 
+      {/* Completion Banner if a session just ended */}
+      <EndedSessionBanner />
+
+      {/* 4. Current Gaming Session Section */}
+      <div className="dashboard-section">
+        {loadingActive ? (
+          <div className="panel-card">
+            <LoadingSpinner message="Checking active gaming session..." />
+          </div>
+        ) : activeSession ? (
+          <ActiveSessionCard onSessionEnded={handleSessionEnded} />
+        ) : (
+          <div className="no-active-session-card">
+            <div className="no-session-content">
+              <span className="no-session-badge">NO ACTIVE SESSION</span>
+              <h2 className="no-session-title">Ready to play?</h2>
+              <p className="no-session-desc">
+                Start a gaming session and let your Copilot keep track of your journey, tactical
+                discoveries, and performance score.
+              </p>
+              <button
+                className="btn-primary btn-large mt-3"
+                onClick={() => setIsModalOpen(true)}
+              >
+                🎮 Start Gaming Session
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 10. Dashboard Overview Cards (Real Data Only) */}
       <div className="metrics-grid">
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Active Session</span>
+            <span className="metric-title">Current Status</span>
+            <span className="metric-icon">{activeSession ? '🔥' : '💤'}</span>
+          </div>
+          <div className="metric-value">
+            {activeSession ? (
+              <span className="text-live">PLAYING</span>
+            ) : (
+              <span className="text-secondary">IDLE</span>
+            )}
+          </div>
+          <p className="metric-desc">
+            {activeSession
+              ? `Currently in: ${activeSession.gameName || 'Live Session'}`
+              : 'Waiting for next gaming sprint'}
+          </p>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-title">Total Sessions</span>
             <span className="metric-icon">🎮</span>
           </div>
-          <div className="metric-value">Idle</div>
-          <p className="metric-desc">No gaming session currently in progress</p>
+          <div className="metric-value">
+            {sessionStats.loading ? '…' : sessionStats.totalSessions}
+          </div>
+          <p className="metric-desc">Completed gaming sessions on record</p>
           <Link to="/sessions" className="metric-link">
-            Launch session tracker →
+            View all sessions →
           </Link>
         </div>
 
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Second Brain</span>
-            <span className="metric-icon">🧠</span>
+            <span className="metric-title">Total Gaming Time</span>
+            <span className="metric-icon">⏱</span>
           </div>
-          <div className="metric-value">Active</div>
-          <p className="metric-desc">Tactical notes & highlights indexed</p>
-          <Link to="/memories" className="metric-link">
-            View memories repository →
-          </Link>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-title">Productivity Tasks</span>
-            <span className="metric-icon">⚡</span>
+          <div className="metric-value">
+            {sessionStats.loading
+              ? '…'
+              : formatDuration(sessionStats.totalDurationSeconds)}
           </div>
-          <div className="metric-value">Ready</div>
-          <p className="metric-desc">Tasks queued for post-game transition</p>
-          <Link to="/tasks" className="metric-link">
-            Open task manager →
+          <p className="metric-desc">Tracked across all logged sessions</p>
+          <Link to="/sessions" className="metric-link">
+            Session history →
           </Link>
         </div>
       </div>
 
+      {/* Feature Navigation Cards */}
       <div className="dashboard-content-grid">
         <div className="panel-card">
           <div className="panel-header">
-            <h2 className="panel-title">AI Copilot Status</h2>
-            <span className="badge-roadmap">COMING IN STEP 9+</span>
+            <h2 className="panel-title">🧠 Gaming Second Brain</h2>
+            <Link to="/memories" className="panel-header-link">Open →</Link>
           </div>
-          <div className="placeholder-container">
-            <div className="placeholder-icon">🤖</div>
-            <h3>Copilot Intelligence Engine</h3>
-            <p>
-              Natural language memory retrieval, real-time gaming session insights, and
-              post-game cooldown recommendations will be connected in subsequent steps.
-            </p>
+          <p className="panel-text">
+            Store tactical takeaways, cross-hair lineups, and clutch moments so you never lose
+            valuable gaming knowledge.
+          </p>
+          <div className="panel-action-box">
+            <Link to="/memories" className="btn-secondary w-full text-center">
+              Explore Memories Repository
+            </Link>
           </div>
         </div>
 
         <div className="panel-card">
           <div className="panel-header">
-            <h2 className="panel-title">API Integration Architecture</h2>
-            <span className="badge-connected">CONNECTED</span>
+            <h2 className="panel-title">⚡ Productivity & Tasks</h2>
+            <Link to="/tasks" className="panel-header-link">Open →</Link>
           </div>
-          <div className="architecture-list">
-            <div className="arch-item">
-              <span className="arch-status status-ok">✓</span>
-              <div>
-                <strong>Express & PostgreSQL Backend</strong>
-                <p>JWT Auth, Games, Sessions, Memories, Tasks REST APIs</p>
-              </div>
-            </div>
-            <div className="arch-item">
-              <span className="arch-status status-ok">✓</span>
-              <div>
-                <strong>React + Vite Client</strong>
-                <p>Authenticated routing, centralized API client, design tokens</p>
-              </div>
-            </div>
-            <div className="arch-item">
-              <span className="arch-status status-pending">⏳</span>
-              <div>
-                <strong>AI & Second Brain Retrieval</strong>
-                <p>Natural-language query and session analysis (Team member)</p>
-              </div>
-            </div>
+          <p className="panel-text">
+            Transition smoothly from high-intensity gaming sessions into focused study or work sprints.
+          </p>
+          <div className="panel-action-box">
+            <Link to="/tasks" className="btn-secondary w-full text-center">
+              Manage Productivity Queue
+            </Link>
           </div>
         </div>
       </div>
+
+      {/* Start Session Modal */}
+      <StartSessionModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSessionStarted={handleSessionStarted}
+      />
     </div>
   );
 };

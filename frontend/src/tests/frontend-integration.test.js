@@ -196,10 +196,162 @@ async function runFrontendIntegrationTests() {
     const t8Passed = authTasksRes.status === 200 && Array.isArray(authTasksRes.body.tasks);
     record(8, 'Authenticated access to protected resource allowed -> 200', t8Passed, `Found tasks array`);
 
-    // Clean up test user in PostgreSQL
-    console.log('\n--- CLEANING UP TEST USER ---');
+    // ========================================================================
+    // STEP 9 GAMING DASHBOARD & SESSIONS FLOW TESTS
+    // ========================================================================
+
+    // ------------------------------------------------------------------------
+    // Test 9: Fetch Games list (GET /api/games) -> 200
+    // ------------------------------------------------------------------------
+    const gamesRes = await request('http://localhost:5000/api/games');
+    const t9Passed = gamesRes.status === 200 && Array.isArray(gamesRes.body.games);
+    record(9, 'Load games catalog (GET /api/games) -> 200', t9Passed, `Found ${gamesRes.body.games?.length} games`);
+
+    // ------------------------------------------------------------------------
+    // Test 10: Create game (POST /api/games) -> 201
+    // ------------------------------------------------------------------------
+    const newGameName = `Apex Legends ${timestamp}`;
+    const createGameRes = await request('http://localhost:5000/api/games', {
+      method: 'POST',
+      body: { name: newGameName, platform: 'PC' }
+    });
+    const testGameId = createGameRes.body?.game?.id;
+    const t10Passed =
+      createGameRes.status === 201 &&
+      createGameRes.body.success === true &&
+      Boolean(testGameId) &&
+      createGameRes.body.game?.name === newGameName;
+    record(10, 'Create new game (POST /api/games) -> 201', t10Passed, `Game ID: ${testGameId}, Name: ${newGameName}`);
+
+    // ------------------------------------------------------------------------
+    // Test 11: Active session initially null (GET /api/sessions/active) -> 200
+    // ------------------------------------------------------------------------
+    const activeInitRes = await request('http://localhost:5000/api/sessions/active', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t11Passed = activeInitRes.status === 200 && activeInitRes.body.session === null;
+    record(11, 'Active session initially null when idle -> 200', t11Passed, `Session: ${activeInitRes.body.session}`);
+
+    // ------------------------------------------------------------------------
+    // Test 12: Start new gaming session (POST /api/sessions) -> 201
+    // ------------------------------------------------------------------------
+    const startSessionRes = await request('http://localhost:5000/api/sessions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { gameId: testGameId, notes: 'Warmup match' }
+    });
+    const createdSession = startSessionRes.body?.session;
+    const activeSessionId = createdSession?.id;
+    const t12Passed =
+      startSessionRes.status === 201 &&
+      startSessionRes.body.success === true &&
+      Boolean(activeSessionId) &&
+      createdSession.gameName === newGameName &&
+      createdSession.endedAt === null &&
+      Boolean(createdSession.startedAt);
+    record(12, 'Start gaming session (POST /api/sessions) -> 201', t12Passed, `Session ID: ${activeSessionId}, StartedAt: ${createdSession?.startedAt}`);
+
+    // ------------------------------------------------------------------------
+    // Test 13: Fetch currently active session (GET /api/sessions/active) -> 200
+    // ------------------------------------------------------------------------
+    const activeLiveRes = await request('http://localhost:5000/api/sessions/active', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t13Passed =
+      activeLiveRes.status === 200 &&
+      activeLiveRes.body.session?.id === activeSessionId &&
+      activeLiveRes.body.session?.gameName === newGameName &&
+      activeLiveRes.body.session?.endedAt === null;
+    record(13, 'Fetch active session while live -> 200', t13Passed, `Game: ${activeLiveRes.body?.session?.gameName}`);
+
+    // ------------------------------------------------------------------------
+    // Test 14: Prevent multiple active sessions (POST /api/sessions) -> 409
+    // ------------------------------------------------------------------------
+    const secondStartRes = await request('http://localhost:5000/api/sessions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { gameId: testGameId }
+    });
+    const t14Passed =
+      secondStartRes.status === 409 &&
+      secondStartRes.body.message === 'An active gaming session already exists';
+    record(14, 'Prevent multiple active sessions in backend -> 409', t14Passed, `Status: ${secondStartRes.status}, Message: ${secondStartRes.body.message}`);
+
+    // ------------------------------------------------------------------------
+    // Test 15: Update active session score, performance, notes (PATCH /api/sessions/:id) -> 200
+    // ------------------------------------------------------------------------
+    const updateRes = await request(`http://localhost:5000/api/sessions/${activeSessionId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: {
+        score: 24,
+        performance: 'Excellent',
+        notes: 'Clutched round 12 with Kraber'
+      }
+    });
+    const t15Passed =
+      updateRes.status === 200 &&
+      updateRes.body.success === true &&
+      updateRes.body.session?.score === 24 &&
+      updateRes.body.session?.performance === 'Excellent';
+    record(15, 'Update active session telemetry (PATCH /api/sessions/:id) -> 200', t15Passed, `Score: ${updateRes.body?.session?.score}, Performance: ${updateRes.body?.session?.performance}`);
+
+    // Wait 1 second so elapsed duration is >= 1
+    await new Promise((r) => setTimeout(r, 1100));
+
+    // ------------------------------------------------------------------------
+    // Test 16: End active gaming session (POST /api/sessions/:id/end) -> 200
+    // ------------------------------------------------------------------------
+    const endRes = await request(`http://localhost:5000/api/sessions/${activeSessionId}/end`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const endedSession = endRes.body?.session;
+    const t16Passed =
+      endRes.status === 200 &&
+      endRes.body.success === true &&
+      endedSession?.endedAt !== null &&
+      endedSession?.duration >= 1;
+    record(16, 'End active session (POST /api/sessions/:id/end) -> 200', t16Passed, `Duration: ${endedSession?.duration}s, EndedAt: ${endedSession?.endedAt}`);
+
+    // ------------------------------------------------------------------------
+    // Test 17: Ending already-ended session returns 409
+    // ------------------------------------------------------------------------
+    const doubleEndRes = await request(`http://localhost:5000/api/sessions/${activeSessionId}/end`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t17Passed = doubleEndRes.status === 409;
+    record(17, 'Ending already-ended session returns 409 Conflict', t17Passed, `Status: ${doubleEndRes.status}`);
+
+    // ------------------------------------------------------------------------
+    // Test 18: Active session is now null (GET /api/sessions/active) -> 200
+    // ------------------------------------------------------------------------
+    const activeAfterEndRes = await request('http://localhost:5000/api/sessions/active', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t18Passed = activeAfterEndRes.status === 200 && activeAfterEndRes.body.session === null;
+    record(18, 'Active session is null after ending -> 200', t18Passed, `Session: ${activeAfterEndRes.body.session}`);
+
+    // ------------------------------------------------------------------------
+    // Test 19: Session appears in user history (GET /api/sessions) -> 200
+    // ------------------------------------------------------------------------
+    const historyRes = await request('http://localhost:5000/api/sessions', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const t19Passed =
+      historyRes.status === 200 &&
+      Array.isArray(historyRes.body.sessions) &&
+      historyRes.body.sessions.some((s) => s.id === activeSessionId && s.score === 24);
+    record(19, 'Ended session appears in user history (GET /api/sessions) -> 200', t19Passed, `Found in history: ${t19Passed}`);
+
+    // Clean up test user & game in PostgreSQL
+    console.log('\n--- CLEANING UP TEST DATA ---');
     await db.query('DELETE FROM users WHERE email = $1;', [testUserEmail]);
-    console.log(`Cleaned up ${testUserEmail} from database.`);
+    if (testGameId) {
+      await db.query('DELETE FROM games WHERE id = $1;', [testGameId]);
+    }
+    console.log(`Cleaned up test user & game from database.`);
 
   } catch (error) {
     console.error('Integration test error:', error);
