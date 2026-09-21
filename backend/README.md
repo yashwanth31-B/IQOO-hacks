@@ -20,12 +20,14 @@ backend/
 │   │   ├── auth.controller.js  # Signup, login, and profile handlers
 │   │   ├── game.controller.js  # Game catalog handlers
 │   │   ├── health.controller.js # Health check endpoint handler (with DB status)
+│   │   ├── memory.controller.js # Gaming Second Brain memory handlers
 │   │   └── session.controller.js # Gaming session lifecycle handlers
 │   ├── routes/                 # API route definitions
 │   │   ├── auth.routes.js      # Authentication endpoints (/api/auth)
 │   │   ├── game.routes.js      # Game endpoints (/api/games)
 │   │   ├── health.routes.js    # Health check route
 │   │   ├── index.js            # Central route aggregator (/api)
+│   │   ├── memory.routes.js    # Gaming memory endpoints (/api/memories)
 │   │   └── session.routes.js   # Gaming session endpoints (/api/sessions)
 │   ├── middleware/             # Express middlewares
 │   │   ├── auth.middleware.js  # JWT Bearer token authentication middleware
@@ -33,10 +35,11 @@ backend/
 │   ├── services/               # Business logic & data operations
 │   │   ├── auth.service.js     # User registration, password hashing, verification
 │   │   ├── game.service.js     # Game creation and catalog queries
+│   │   ├── memory.service.js   # Memory creation, JSONB metadata, session joins, ownership
 │   │   └── session.service.js  # Session creation, duration calculation, ownership enforcement
 │   ├── utils/                  # Reusable utility functions
 │   │   ├── jwt.utils.js        # JWT signing & verification helpers
-│   │   └── validation.utils.js # Email, UUID, game, session, and pagination validation
+│   │   └── validation.utils.js # Email, UUID, game, session, memory, and pagination validation
 │   ├── db/                     # PostgreSQL database layer
 │   │   ├── migrations/         # Plain SQL migration files
 │   │   │   └── 001_initial_schema.sql
@@ -46,6 +49,7 @@ backend/
 │   │   └── verify-schema.js    # Schema inspection utility
 │   ├── tests/                  # Automated test suites
 │   │   ├── auth.test.js        # Authentication & health test suite (15 tests)
+│   │   ├── memory.test.js      # Gaming memory test suite (22 tests)
 │   │   └── session.test.js     # Gaming session & games test suite (20 tests)
 │   └── server.js               # Express application entry point & server bootstrap
 ├── .env.example                # Template for environment variables
@@ -74,7 +78,7 @@ cp .env.example .env
 
 - **`npm run dev`**: Starts the development server with hot reload via `nodemon`.
 - **`npm start`**: Runs the server in production mode using standard `node`.
-- **`npm test`**: Runs the full automated test suite (35 assertions across auth and session suites).
+- **`npm test`**: Runs the full automated test suite (57 assertions across auth, session, and memory suites).
 - **`npm run db:check`**: Tests connectivity to the PostgreSQL database.
 - **`npm run db:migrate`**: Executes pending SQL migrations in `src/db/migrations/` sequentially.
 
@@ -408,7 +412,226 @@ cp .env.example .env
 
 ---
 
-### 4. System Health (`/api/health`)
+### 4. Gaming Second Brain Memories (`/api/memories`)
+
+> 🧠 **Overview**: Gaming memories represent meaningful insights, tactics, highlights, and lessons from a player's gaming journey. These will be indexed and queried by the AI layer.
+>
+> 🔒 **Security Notice**: All memory endpoints require authentication via `Authorization: Bearer <token>`. Strict ownership is enforced:
+> - Users can only view, update, or delete their own memories.
+> - If `sessionId` is provided, the backend verifies that the session belongs to `req.user.id`. Attaching a memory to another user's session is blocked with `404 Not Found`.
+> - Accessing another user's memory returns `404 Not Found`.
+
+#### Create Gaming Memory
+- **Method / Path**: `POST /api/memories`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Request Body**:
+  ```json
+  {
+    "title": "Best Valorant session",
+    "summary": "My strongest performance after a 20 minute warm-up.",
+    "memoryType": "performance",
+    "sessionId": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+    "metadata": {
+      "map": "Haven",
+      "kills": 28,
+      "deaths": 14
+    }
+  }
+  ```
+- **Validation**:
+  - `title`: Required, non-empty string, max 255 chars.
+  - `memoryType`: Required, non-empty string, max 100 chars (e.g., `performance`, `tactics`, `highlight`, `note`).
+  - `summary`: Optional string, max 5000 chars.
+  - `sessionId`: Optional UUID. If supplied, session must exist and belong to `req.user.id` (404 if not found or not owned).
+  - `metadata`: Optional plain JSON object. Arrays, primitives, or `null` are rejected with 400.
+- **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Gaming memory created successfully",
+    "memory": {
+      "id": "121e10cb-82af-4b7b-8bf1-f6c461a307a1",
+      "title": "Best Valorant session",
+      "summary": "My strongest performance after a 20 minute warm-up.",
+      "memoryType": "performance",
+      "sessionId": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "metadata": {
+        "map": "Haven",
+        "kills": 28,
+        "deaths": 14
+      },
+      "session": {
+        "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+        "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+        "gameName": "Valorant",
+        "platform": "PC",
+        "startedAt": "2026-09-20T17:22:50.857Z",
+        "endedAt": "2026-09-20T17:22:51.897Z",
+        "duration": 1
+      },
+      "createdAt": "2026-09-21T04:34:25.694Z",
+      "updatedAt": "2026-09-21T04:34:25.694Z"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `201 Created`: Memory created successfully.
+  - `400 Bad Request`: Missing title/memoryType, invalid UUID format, or non-object metadata.
+  - `401 Unauthorized`: Missing or invalid token.
+  - `404 Not Found`: Referenced `sessionId` does not exist or belongs to another user.
+
+#### Get Gaming Memories (Paginated & Filterable)
+- **Method / Path**: `GET /api/memories`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Query Parameters**:
+  - `page` (default: `1`, min: `1`)
+  - `limit` (default: `20`, max: `100`)
+  - `memoryType` (optional, e.g. `?memoryType=highlight`)
+  - `sessionId` (optional UUID, e.g. `?sessionId=38a58273-3e28-4b9f-82d2-7a67515bf72d`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "memories": [
+      {
+        "id": "121e10cb-82af-4b7b-8bf1-f6c461a307a1",
+        "title": "Best Valorant session",
+        "summary": "My strongest performance after a 20 minute warm-up.",
+        "memoryType": "performance",
+        "sessionId": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+        "metadata": {
+          "map": "Haven",
+          "kills": 28,
+          "deaths": 14
+        },
+        "session": {
+          "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+          "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+          "gameName": "Valorant",
+          "platform": "PC",
+          "startedAt": "2026-09-20T17:22:50.857Z",
+          "endedAt": "2026-09-20T17:22:51.897Z",
+          "duration": 1
+        },
+        "createdAt": "2026-09-21T04:34:25.694Z",
+        "updatedAt": "2026-09-21T04:34:25.694Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Retrieved successfully.
+  - `400 Bad Request`: Invalid pagination values or invalid `sessionId` UUID.
+  - `401 Unauthorized`: Missing or invalid token.
+
+#### Get Single Gaming Memory
+- **Method / Path**: `GET /api/memories/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "memory": {
+      "id": "121e10cb-82af-4b7b-8bf1-f6c461a307a1",
+      "title": "Best Valorant session",
+      "summary": "My strongest performance after a 20 minute warm-up.",
+      "memoryType": "performance",
+      "sessionId": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "metadata": {
+        "map": "Haven",
+        "kills": 28,
+        "deaths": 14
+      },
+      "session": {
+        "id": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+        "gameId": "3d05f33f-d632-4acd-8671-9beb611549ab",
+        "gameName": "Valorant",
+        "platform": "PC",
+        "startedAt": "2026-09-20T17:22:50.857Z",
+        "endedAt": "2026-09-20T17:22:51.897Z",
+        "duration": 1
+      },
+      "createdAt": "2026-09-21T04:34:25.694Z",
+      "updatedAt": "2026-09-21T04:34:25.694Z"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Found and returned.
+  - `400 Bad Request`: Invalid UUID format.
+  - `401 Unauthorized`: Missing or invalid token.
+  - `404 Not Found`: Memory does not exist or belongs to another user.
+
+#### Update Gaming Memory
+- **Method / Path**: `PATCH /api/memories/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Request Body** *(at least one field)*:
+  ```json
+  {
+    "title": "Updated Valorant Session Strategy",
+    "metadata": {
+      "map": "Haven",
+      "kills": 30,
+      "deaths": 14,
+      "ace": true
+    }
+  }
+  ```
+- **Allowed Fields**: `title`, `summary`, `memoryType`, `metadata`. Disallowed fields (`id`, `userId`, `sessionId`, `createdAt`) are rejected.
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Gaming memory updated successfully",
+    "memory": {
+      "id": "121e10cb-82af-4b7b-8bf1-f6c461a307a1",
+      "title": "Updated Valorant Session Strategy",
+      "summary": "My strongest performance after a 20 minute warm-up.",
+      "memoryType": "performance",
+      "sessionId": "38a58273-3e28-4b9f-82d2-7a67515bf72d",
+      "metadata": {
+        "map": "Haven",
+        "kills": 30,
+        "deaths": 14,
+        "ace": true
+      },
+      "session": { ... },
+      "createdAt": "2026-09-21T04:34:25.694Z",
+      "updatedAt": "2026-09-21T04:34:25.789Z"
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Updated successfully.
+  - `400 Bad Request`: Invalid UUID, non-object metadata, or disallowed fields.
+  - `401 Unauthorized`: Missing or invalid token.
+  - `404 Not Found`: Memory does not exist or belongs to another user.
+
+#### Delete Gaming Memory
+- **Method / Path**: `DELETE /api/memories/:id`
+- **Auth Required**: Yes (`Authorization: Bearer <token>`)
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Gaming memory deleted successfully"
+  }
+  ```
+- **Status Codes**:
+  - `200 OK`: Deleted successfully.
+  - `400 Bad Request`: Invalid UUID format.
+  - `401 Unauthorized`: Missing or invalid token.
+  - `404 Not Found`: Memory does not exist or belongs to another user.
+
+---
+
+### 5. System Health (`/api/health`)
 
 - **Method / Path**: `GET /api/health`
 - **Auth Required**: No

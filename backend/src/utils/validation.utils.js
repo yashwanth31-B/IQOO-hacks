@@ -1,5 +1,5 @@
 /**
- * Validation utilities for authentication, games, and gaming sessions
+ * Validation utilities for authentication, games, gaming sessions, and memories
  */
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -33,6 +33,18 @@ const normalizeEmail = (email) => {
 const isValidUUID = (uuid) => {
   if (typeof uuid !== 'string') return false;
   return UUID_REGEX.test(uuid.trim());
+};
+
+/**
+ * Validate plain JSON object for metadata
+ * @param {*} metadata 
+ * @returns {boolean}
+ */
+const isValidMetadata = (metadata) => {
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+    return false;
+  }
+  return true;
 };
 
 /**
@@ -218,6 +230,118 @@ const validateUpdateSessionInput = (body) => {
 };
 
 /**
+ * Validate memory creation payload
+ * @param {Object} param0 
+ * @returns {{ isValid: boolean, error?: string }}
+ */
+const validateCreateMemoryInput = ({ title, summary, memoryType, sessionId, metadata }) => {
+  if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    return { isValid: false, error: 'Title is required' };
+  }
+
+  if (title.trim().length > 255) {
+    return { isValid: false, error: 'Title must not exceed 255 characters' };
+  }
+
+  if (!memoryType || typeof memoryType !== 'string' || memoryType.trim().length === 0) {
+    return { isValid: false, error: 'memoryType is required' };
+  }
+
+  if (memoryType.trim().length > 100) {
+    return { isValid: false, error: 'memoryType must not exceed 100 characters' };
+  }
+
+  if (summary !== undefined && summary !== null) {
+    if (typeof summary !== 'string') {
+      return { isValid: false, error: 'Summary must be a string' };
+    }
+    if (summary.trim().length > 5000) {
+      return { isValid: false, error: 'Summary must not exceed 5000 characters' };
+    }
+  }
+
+  if (sessionId !== undefined && sessionId !== null) {
+    if (typeof sessionId !== 'string' || !isValidUUID(sessionId)) {
+      return { isValid: false, error: 'Valid sessionId (UUID) is required' };
+    }
+  }
+
+  if (metadata !== undefined) {
+    if (!isValidMetadata(metadata)) {
+      return { isValid: false, error: 'Metadata must be a valid JSON object' };
+    }
+  }
+
+  return { isValid: true };
+};
+
+/**
+ * Validate memory update payload
+ * @param {Object} body 
+ * @returns {{ isValid: boolean, error?: string }}
+ */
+const validateUpdateMemoryInput = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { isValid: false, error: 'Request body must be an object' };
+  }
+
+  const disallowedFields = [
+    'id', 'userId', 'user_id', 'sessionId', 'session_id', 
+    'createdAt', 'created_at', 'updatedAt', 'updated_at'
+  ];
+
+  for (const field of disallowedFields) {
+    if (body[field] !== undefined) {
+      return { isValid: false, error: `Field '${field}' cannot be modified` };
+    }
+  }
+
+  const { title, summary, memoryType, metadata } = body;
+
+  if (title === undefined && summary === undefined && memoryType === undefined && metadata === undefined) {
+    return {
+      isValid: false,
+      error: 'At least one field (title, summary, memoryType, metadata) must be provided for update'
+    };
+  }
+
+  if (title !== undefined) {
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return { isValid: false, error: 'Title cannot be empty' };
+    }
+    if (title.trim().length > 255) {
+      return { isValid: false, error: 'Title must not exceed 255 characters' };
+    }
+  }
+
+  if (memoryType !== undefined) {
+    if (!memoryType || typeof memoryType !== 'string' || memoryType.trim().length === 0) {
+      return { isValid: false, error: 'memoryType cannot be empty' };
+    }
+    if (memoryType.trim().length > 100) {
+      return { isValid: false, error: 'memoryType must not exceed 100 characters' };
+    }
+  }
+
+  if (summary !== undefined && summary !== null) {
+    if (typeof summary !== 'string') {
+      return { isValid: false, error: 'Summary must be a string' };
+    }
+    if (summary.trim().length > 5000) {
+      return { isValid: false, error: 'Summary must not exceed 5000 characters' };
+    }
+  }
+
+  if (metadata !== undefined) {
+    if (!isValidMetadata(metadata)) {
+      return { isValid: false, error: 'Metadata must be a valid JSON object' };
+    }
+  }
+
+  return { isValid: true };
+};
+
+/**
  * Validate pagination parameters
  * @param {Object} query 
  * @returns {{ isValid: boolean, page: number, limit: number, error?: string }}
@@ -249,11 +373,14 @@ module.exports = {
   isValidEmail,
   normalizeEmail,
   isValidUUID,
+  isValidMetadata,
   validateSignupInput,
   validateLoginInput,
   validateGameInput,
   validateCreateSessionInput,
   validateUpdateSessionInput,
+  validateCreateMemoryInput,
+  validateUpdateMemoryInput,
   validatePagination,
   MIN_PASSWORD_LENGTH
 };
