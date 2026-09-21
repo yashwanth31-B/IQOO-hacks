@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { formatDuration } from '../utils/date.utils';
 import SessionHistoryList from '../components/SessionHistoryList';
+import { SECOND_BRAIN_URL } from '../utils/constants';
 
 /**
  * GAMING SECOND BRAIN — "BEFORE"
@@ -11,7 +12,7 @@ import SessionHistoryList from '../components/SessionHistoryList';
  */
 export const Memories = () => {
   const navigate = useNavigate();
-  const hudUrl = `http://${window.location.hostname || 'localhost'}:8000`;
+  const hudUrl = SECOND_BRAIN_URL;
 
   const [stats, setStats] = useState({
     totalSessions: 0,
@@ -91,7 +92,7 @@ export const Memories = () => {
             className="btn-primary"
             title="Launch external Python NLP simulation cockpit"
           >
-            🚀 Open Simulator (Port 8000) ↗
+            🚀 Open Cyber HUD (8000) ↗
           </a>
         </div>
       </div>

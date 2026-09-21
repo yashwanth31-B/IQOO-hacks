@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import HealthBadge from '../components/HealthBadge';
+import { SECOND_BRAIN_URL } from '../utils/constants';
 
 export const AppLayout = () => {
   const { user, logout } = useAuth();
@@ -118,7 +119,7 @@ export const AppLayout = () => {
             </NavLink>
           ))}
           <a
-            href={`http://${window.location.hostname || 'localhost'}:8000`}
+            href={SECOND_BRAIN_URL}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setMobileMenuOpen(false)}
@@ -127,7 +128,7 @@ export const AppLayout = () => {
             title="Open Python NLP match simulation cockpit"
           >
             <span className="nav-icon">🚀</span>
-            <span className="nav-label">Simulator (8000) ↗</span>
+            <span className="nav-label">Cyber HUD (8000) ↗</span>
           </a>
         </nav>
 
