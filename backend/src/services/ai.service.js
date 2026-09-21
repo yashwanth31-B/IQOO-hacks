@@ -1,5 +1,6 @@
 const db = require('../db');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const http = require('http');
 
 /**
  * Service handling AI Context Retrieval, Intelligent Context Selection,
@@ -273,64 +274,136 @@ const selectIntelligentContext = (message, fullContext) => {
  * @returns {string}
  */
 const generateDevelopmentResponse = (message, context) => {
-  const lower = message.toLowerCase();
+  const lower = (message || '').toLowerCase();
 
-  // Query: Highest score or best performance
+  // 1. Highest score or best performance
   if (
-    (lower.includes('best') || lower.includes('highest') || lower.includes('strongest') || lower.includes('score')) &&
-    context.sessions.length > 0
+    lower.includes('best') ||
+    lower.includes('highest') ||
+    lower.includes('strongest') ||
+    (lower.includes('score') && (lower.includes('what') || lower.includes('when') || lower.includes('my') || lower.includes('perform')))
   ) {
-    const scored = context.sessions.filter((s) => s.score !== null);
-    if (scored.length > 0) {
-      const best = scored.reduce((max, s) => (s.score > max.score ? s : max), scored[0]);
-      const sessionDate = new Date(best.startedAt).toLocaleDateString('en-US', {
+    if (context.sessions && context.sessions.length > 0) {
+      const scored = context.sessions.filter((s) => s.score !== null && s.score !== undefined);
+      if (scored.length > 0) {
+        const best = scored.reduce((max, s) => (Number(s.score) > Number(max.score) ? s : max), scored[0]);
+        const sessionDate = new Date(best.startedAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        return `Your strongest recorded session was your ${best.gameName} session on ${sessionDate} with a score of ${best.score}${
+          best.performance ? ` and rating "${best.performance}"` : ''
+        }.\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
+      }
+    }
+    return "You haven't recorded any sessions with score data yet! Start a gaming session and record your match points to track your personal best.";
+  }
+
+  // 2. Last gaming session
+  if (lower.includes('last') || lower.includes('recent') || lower.includes('previous match')) {
+    if (context.sessions && context.sessions.length > 0) {
+      const last = context.sessions[0];
+      const sessionDate = new Date(last.startedAt).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric'
       });
-      return `Your strongest recorded session was your ${best.gameName} session on ${sessionDate} with a score of ${best.score}${
-        best.performance ? ` and rating "${best.performance}"` : ''
+      return `Your most recent recorded session was ${last.gameName}${
+        last.platform ? ` on ${last.platform}` : ''
+      } played on ${sessionDate}${
+        last.duration ? ` (${Math.round(last.duration / 60)} minutes)` : ''
       }.\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
     }
+    return "No previous gaming sessions recorded in your Second Brain yet. Click '🎮 Start Session' on the dashboard to log your first match!";
   }
 
-  // Query: Last gaming session
-  if ((lower.includes('last') || lower.includes('recent')) && context.sessions.length > 0) {
-    const last = context.sessions[0];
-    const sessionDate = new Date(last.startedAt).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    return `Your most recent recorded session was ${last.gameName}${
-      last.platform ? ` on ${last.platform}` : ''
-    } played on ${sessionDate}${
-      last.duration ? ` (${Math.round(last.duration / 60)} minutes)` : ''
-    }.\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
-  }
-
-  // Query: Tasks or pending tasks
-  if ((lower.includes('task') || lower.includes('pending')) && context.tasks.length > 0) {
-    const pending = context.tasks.filter((t) => !t.completed);
-    if (pending.length > 0) {
-      const list = pending.slice(0, 5).map((t) => `• ${t.title} [${t.priority}]`).join('\n');
-      return `You have ${pending.length} pending task(s):\n${list}\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
+  // 3. Tasks or pending tasks
+  if (lower.includes('task') || lower.includes('pending') || lower.includes('to-do') || lower.includes('todo')) {
+    if (context.tasks && context.tasks.length > 0) {
+      const pending = context.tasks.filter((t) => !t.completed);
+      if (pending.length > 0) {
+        const list = pending.slice(0, 5).map((t) => `• ${t.title} [${t.priority}]`).join('\n');
+        return `You have ${pending.length} pending task(s):\n${list}\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
+      }
+      return `All your tasks are currently marked completed!\n\n(AI service is in development mode.)`;
     }
-    return `All your tasks are currently marked completed!\n\n(AI service is in development mode.)`;
+    return `You have no productivity tasks in your queue right now. You can add focused homework or study tasks to smoothly wind down after gaming.`;
   }
 
-  // Query: Total gaming time logged
+  // 4. Total gaming time logged
   if (
-    (lower.includes('how much') || lower.includes('time') || lower.includes('spent') || lower.includes('gamed')) &&
-    context.sessions.length > 0
+    lower.includes('how much') ||
+    lower.includes('time') ||
+    lower.includes('spent') ||
+    lower.includes('gamed') ||
+    lower.includes('hours')
   ) {
-    const totalSeconds = context.sessions.reduce((acc, s) => acc + (s.duration || 0), 0);
-    const totalMinutes = Math.round(totalSeconds / 60);
-    return `You have logged approximately ${totalMinutes} minute(s) across your ${context.sessions.length} most recent recorded gaming session(s).\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
+    if (context.sessions && context.sessions.length > 0) {
+      const totalSeconds = context.sessions.reduce((acc, s) => acc + (s.duration || 0), 0);
+      const totalMinutes = Math.round(totalSeconds / 60);
+      return `You have logged approximately ${totalMinutes} minute(s) across your ${context.sessions.length} most recent recorded gaming session(s).\n\n(AI service is in development mode. Sources retrieved from your Second Brain records.)`;
+    }
+    return `You haven't logged any gaming time yet. Start a session from the Gaming Sessions page to track your playtime and prevent burnout.`;
   }
 
-  // Default transparent response
-  return 'AI service is not configured yet. The Copilot interface is ready for AI integration.';
+  // 5. Greetings & Introductions
+  if (
+    lower.includes('hello') ||
+    lower.includes('hi ') ||
+    lower === 'hi' ||
+    lower.includes('hey') ||
+    lower.includes('sup') ||
+    lower.includes('who are you') ||
+    lower.includes('help')
+  ) {
+    const sessionCount = context.sessions ? context.sessions.length : 0;
+    return `Hey there! I am your AI Gaming Copilot & Second Brain companion. 🎮\n\nI analyze your live gameplay, track tactical takeaways, and help you improve without tilting. Currently tracking ${sessionCount} session(s) in your Second Brain.\n\nTry asking:\n• "When did I perform best?"\n• "What was my last session?"\n• "How do I stop tilting?"\n• "What should I focus on next?"`;
+  }
+
+  // 6. Tilt & Mental Management
+  if (
+    lower.includes('tilt') ||
+    lower.includes('frustrat') ||
+    lower.includes('angry') ||
+    lower.includes('losing') ||
+    lower.includes('streak') ||
+    lower.includes('burnout') ||
+    lower.includes('fatigue')
+  ) {
+    return `Here is your Copilot Tilt Reset Protocol:\n\n1. 🛑 The 2-Death / 2-Loss Step-Back: When you lose 2 matches in a row, step away from the screen for 3 minutes.\n2. 🫁 4-4-6 Breathing: Inhale 4s, hold 4s, exhale 6s to lower heart rate and clear adrenaline.\n3. ⏱️ 75-Minute Cap: Reaction times drop significantly after 75 minutes of high-intensity play.\n4. 🌙 11:00 PM Hard Stop: Late-night matches show a steep drop in duel win rates due to micro-sleeps.`;
+  }
+
+  // 7. Tactical & Improvement Advice
+  if (
+    lower.includes('improve') ||
+    lower.includes('better') ||
+    lower.includes('tips') ||
+    lower.includes('aim') ||
+    lower.includes('crosshair') ||
+    lower.includes('focus') ||
+    lower.includes('strategy') ||
+    lower.includes('warmup') ||
+    lower.includes('what should i do')
+  ) {
+    return `Here are key tactical fundamentals from your Second Brain:\n\n• Crosshair Pre-Aiming: Always keep your crosshairs at head level aligned with the corner before swinging.\n• Utility Before Peeking: Never dry-peek contested sniper sightlines without flash, smoke, or recon utility.\n• Trade Discipline: Position within 2 seconds of a teammate to ensure instant re-frag trades.\n• 10-Minute Warmup: Spend 10 minutes in the range calibrating tracking before entering ranked matches.`;
+  }
+
+  // 8. Game Specific Strategy
+  if (lower.includes('valorant') || lower.includes('cs2') || lower.includes('haven') || lower.includes('ascent')) {
+    return `Tactical Protocol for Tactical Shooters (Valorant/CS2):\n\n• Defense Rule: Concede aggressive long angles (e.g. Haven C Long, Ascent Mid) during the first 10 seconds unless executing coordinated utility.\n• Site Anchoring: Play crossfire positions with a teammate instead of taking solo 50-50 duels.\n• Post-Plant: Anchor site utility and play the spike timer rather than hunting exit frags.`;
+  }
+
+  if (lower.includes('bgmi') || lower.includes('pubg') || lower.includes('free fire') || lower.includes('erangel')) {
+    return `Battle Royale Protocol (BGMI/PUBG/Free Fire):\n\n• Zone Rotations: Rotate early on the short side of the circle to secure compound control.\n• Vehicle Preservation: Always keep a vehicle behind cover for mobile rotation and emergency smoke barriers.\n• High Ground: Never give up vertical elevation for a low-ground thirst kill.`;
+  }
+
+  if (lower.includes('elden') || lower.includes('margit') || lower.includes('boss') || lower.includes('roll')) {
+    return `Soulslike / Elden Ring Protocol:\n\n• Roll Timing: Count 2 internal beats on delayed overhead windups. Watch the weapon release frame, not the telegraph windup.\n• Stamina Buffer: Maintain at least 25% stamina reserve at all times. Never commit to an extra swing when stamina is red.\n• Low-HP Discipline: When a boss drops below 20% HP, slow down and treat the fight like Phase 1.`;
+  }
+
+  // Default helpful response
+  return `I am your AI Gaming Copilot! I monitor your gaming sessions, evaluate tactical decisions, and preserve your Second Brain insights.\n\nYou can ask me about:\n• Your performance stats ("When did I perform best?", "How much have I gamed?")\n• Your match history ("What was my last session?")\n• Your pending tasks ("What tasks are pending?")\n• Tactical and mental tips ("How to stop tilting?", "Give me warmup drills")`;
 };
 
 const chatHistoryService = require('./chat-history.service');
@@ -344,12 +417,12 @@ const chatHistoryService = require('./chat-history.service');
  * @returns {Promise<{ message: string, insights: Array<string>, referencedSourceIds: Object }>}
  */
 const generateGeminiCompletion = async (message, context, history = []) => {
-  const apiKey = process.env.AI_API_KEY;
+  const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     throw new Error('AI_API_KEY is not configured');
   }
 
-  const modelName = process.env.AI_MODEL || 'gemini-1.5-flash';
+  const modelName = process.env.AI_MODEL || process.env.GEMINI_MODEL || 'gemini-1.5-flash';
   const genAI = new GoogleGenerativeAI(apiKey);
 
   const systemInstruction = `You are AI Gaming Copilot, an intelligent gaming assistant and Second Brain companion.
@@ -481,6 +554,71 @@ const buildSources = (context, referencedIds = null) => {
 };
 
 /**
+ * Query Python Second Brain Copilot service if available on port 8000
+ * 
+ * @param {string} message 
+ * @param {string} [game]
+ * @returns {Promise<{ message: string, insights: Array<string> } | null>}
+ */
+const queryPythonSecondBrain = (message, game = null) => {
+  return new Promise((resolve) => {
+    try {
+      const payload = JSON.stringify({ message, game });
+      const req = http.request(
+        'http://127.0.0.1:8000/api/copilot/chat',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload)
+          },
+          timeout: 2000
+        },
+        (res) => {
+          if (res.statusCode !== 200) {
+            return resolve(null);
+          }
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              const text = parsed.reply || parsed.answer || '';
+              // Don't use python's insufficient data generic fallbacks
+              if (!text || text.includes('No matching records found') || text.includes('No sessions recorded')) {
+                return resolve(null);
+              }
+              const insights = [];
+              if (parsed.insight && !parsed.insight.includes('Not enough data')) {
+                insights.push(parsed.insight);
+              }
+              if (parsed.recommendation && !parsed.recommendation.includes('Not enough data')) {
+                insights.push(parsed.recommendation);
+              }
+              resolve({
+                message: text,
+                insights
+              });
+            } catch {
+              resolve(null);
+            }
+          });
+        }
+      );
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(null);
+      });
+      req.write(payload);
+      req.end();
+    } catch {
+      resolve(null);
+    }
+  });
+};
+
+/**
  * Pluggable AI Provider Adapter
  * 
  * Supports Gemini AI with automatic fallback to development adapter
@@ -491,25 +629,15 @@ const buildSources = (context, referencedIds = null) => {
  * @returns {Promise<{ message: string, insights?: Array<string>, sources: Object, provider: string }>}
  */
 const generateResponse = async (message, context, history = []) => {
-  const provider = (process.env.AI_PROVIDER || 'development').toLowerCase();
-  const apiKey = process.env.AI_API_KEY;
+  const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const configuredProvider = (process.env.AI_PROVIDER || '').toLowerCase();
+  const provider = configuredProvider || (apiKey ? 'gemini' : 'development');
 
   // 1. Intelligent context selection
   const intelligentContext = selectIntelligentContext(message, context);
 
-  // 2. Development adapter mode
-  if (provider === 'development' || !apiKey) {
-    const reply = generateDevelopmentResponse(message, intelligentContext);
-    return {
-      message: reply,
-      insights: [],
-      sources: buildSources(intelligentContext),
-      provider: 'development'
-    };
-  }
-
-  // 3. Gemini mode
-  if (provider === 'gemini') {
+  // 2. Gemini mode (when configured)
+  if (provider === 'gemini' && apiKey) {
     try {
       const completion = await generateGeminiCompletion(message, intelligentContext, history);
 
@@ -550,10 +678,46 @@ const generateResponse = async (message, context, history = []) => {
     }
   }
 
-  // Unknown provider fallback
-  const fallbackReply = generateDevelopmentResponse(message, intelligentContext);
+  // 3. Stats / session queries prioritize user's own scoped database records
+  const lower = message.toLowerCase();
+  const isPersonalStatsQuery =
+    lower.includes('best') ||
+    lower.includes('highest') ||
+    lower.includes('strongest') ||
+    lower.includes('last') ||
+    lower.includes('recent') ||
+    lower.includes('task') ||
+    lower.includes('pending') ||
+    lower.includes('how much') ||
+    lower.includes('time') ||
+    lower.includes('spent') ||
+    lower.includes('hours');
+
+  if (isPersonalStatsQuery) {
+    const reply = generateDevelopmentResponse(message, intelligentContext);
+    return {
+      message: reply,
+      insights: [],
+      sources: buildSources(intelligentContext),
+      provider: 'development'
+    };
+  }
+
+  // 4. Check if Python Second Brain engine is online for tactical queries
+  const pythonReply = await queryPythonSecondBrain(message);
+  if (pythonReply) {
+    return {
+      message: pythonReply.message,
+      insights: pythonReply.insights,
+      sources: buildSources(intelligentContext),
+      provider: 'second-brain-engine'
+    };
+  }
+
+  // 5. Development conversational response
+  const reply = generateDevelopmentResponse(message, intelligentContext);
   return {
-    message: fallbackReply,
+    message: reply,
     insights: [],
     sources: buildSources(intelligentContext),
     provider: 'development'
