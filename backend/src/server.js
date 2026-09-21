@@ -7,6 +7,7 @@ const routes = require('./routes');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
 
 // Load environment variables from .env file
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
 const app = express();
