@@ -68,7 +68,7 @@ async function runAiTests() {
   let taskAId, taskBId;
 
   let passedTests = 0;
-  const totalTests = 18;
+  const totalTests = 30;
 
   try {
     // 1. Setup User A
@@ -588,6 +588,257 @@ async function runAiTests() {
         console.error('❌ FAIL [Test 18] Health endpoint check failed:', res);
       }
     }
+
+    let testConvoAId;
+    let autoConvoId;
+
+    // TEST 19: Create conversation explicitly via POST /api/ai/conversations
+    {
+      const res = await request(server, {
+        method: 'POST',
+        path: '/api/ai/conversations',
+        headers: { Authorization: `Bearer ${userAToken}` },
+        body: { title: 'My Valorant Strategies' }
+      });
+      if (
+        res.status === 201 &&
+        res.body.success === true &&
+        res.body.data?.conversation?.id &&
+        res.body.data?.conversation?.title === 'My Valorant Strategies'
+      ) {
+        testConvoAId = res.body.data.conversation.id;
+        console.log('✅ PASS [Test 19] Create conversation explicitly -> 201');
+        console.log(`       Conversation ID: ${testConvoAId}, Title: ${res.body.data.conversation.title}`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 19] Failed to create conversation:', res.body);
+      }
+    }
+
+    // TEST 20: List conversations for authenticated user via GET /api/ai/conversations
+    {
+      const res = await request(server, {
+        method: 'GET',
+        path: '/api/ai/conversations',
+        headers: { Authorization: `Bearer ${userAToken}` }
+      });
+      const convos = res.body.data?.conversations;
+      if (
+        res.status === 200 &&
+        res.body.success === true &&
+        Array.isArray(convos) &&
+        convos.some((c) => c.id === testConvoAId)
+      ) {
+        console.log('✅ PASS [Test 20] List conversations for authenticated user -> 200');
+        console.log(`       Found ${convos.length} conversation(s) for User A`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 20] Failed to list conversations:', res.body);
+      }
+    }
+
+    // TEST 21: Get conversation by ID via GET /api/ai/conversations/:id
+    {
+      const res = await request(server, {
+        method: 'GET',
+        path: `/api/ai/conversations/${testConvoAId}`,
+        headers: { Authorization: `Bearer ${userAToken}` }
+      });
+      if (
+        res.status === 200 &&
+        res.body.success === true &&
+        res.body.data?.conversation?.id === testConvoAId &&
+        Array.isArray(res.body.data?.conversation?.messages)
+      ) {
+        console.log('✅ PASS [Test 21] Get conversation by ID -> 200');
+        console.log(`       Messages count: ${res.body.data.conversation.messages.length}`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 21] Failed to get conversation by ID:', res.body);
+      }
+    }
+
+    // TEST 22: Unauthenticated conversation access rejected -> 401
+    {
+      const resPost = await request(server, {
+        method: 'POST',
+        path: '/api/ai/conversations',
+        body: { title: 'Unauth Convo' }
+      });
+      const resGet = await request(server, {
+        method: 'GET',
+        path: '/api/ai/conversations'
+      });
+      const resDelete = await request(server, {
+        method: 'DELETE',
+        path: `/api/ai/conversations/${testConvoAId}`
+      });
+
+      if (resPost.status === 401 && resGet.status === 401 && resDelete.status === 401) {
+        console.log('✅ PASS [Test 22] Unauthenticated conversation requests rejected -> 401');
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 22] Expected 401 for unauthenticated conversation requests:', {
+          post: resPost.status,
+          get: resGet.status,
+          delete: resDelete.status
+        });
+      }
+    }
+
+    // TEST 23: Send message without conversationId -> automatically creates conversation & saves messages
+    {
+      const res = await request(server, {
+        method: 'POST',
+        path: '/api/ai/chat',
+        headers: { Authorization: `Bearer ${userAToken}` },
+        body: { message: 'When did I perform best in Valorant?' }
+      });
+
+      autoConvoId = res.body.data?.conversationId;
+      if (
+        res.status === 200 &&
+        res.body.success === true &&
+        Boolean(autoConvoId) &&
+        typeof res.body.data.message === 'string'
+      ) {
+        console.log('✅ PASS [Test 23] Automatically create conversation when conversationId missing -> 200');
+        console.log(`       Created Conversation ID: ${autoConvoId}`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 23] Expected auto-created conversationId:', res.body);
+      }
+    }
+
+    // TEST 24: Continue existing conversation: sending conversationId appends messages
+    {
+      const res = await request(server, {
+        method: 'POST',
+        path: '/api/ai/chat',
+        headers: { Authorization: `Bearer ${userAToken}` },
+        body: {
+          message: 'Can you give me more details about that match?',
+          conversationId: autoConvoId
+        }
+      });
+
+      if (
+        res.status === 200 &&
+        res.body.success === true &&
+        res.body.data?.conversationId === autoConvoId
+      ) {
+        console.log('✅ PASS [Test 24] Continue existing conversation preserves conversationId -> 200');
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 24] Expected continued conversation to match conversationId:', res.body);
+      }
+    }
+
+    // TEST 25: Verify messages persisted in PostgreSQL DB
+    {
+      const res = await request(server, {
+        method: 'GET',
+        path: `/api/ai/conversations/${autoConvoId}`,
+        headers: { Authorization: `Bearer ${userAToken}` }
+      });
+
+      const messages = res.body.data?.conversation?.messages || [];
+      const hasUserMsg1 = messages.some((m) => m.role === 'user' && m.content.includes('When did I perform best'));
+      const hasBotMsg1 = messages.some((m) => m.role === 'assistant');
+      const hasUserMsg2 = messages.some((m) => m.role === 'user' && m.content.includes('more details'));
+
+      if (res.status === 200 && messages.length >= 4 && hasUserMsg1 && hasBotMsg1 && hasUserMsg2) {
+        console.log('✅ PASS [Test 25] Messages reliably persisted in PostgreSQL database with correct roles');
+        console.log(`       Persisted messages count in conversation: ${messages.length}`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 25] Message persistence check failed:', messages);
+      }
+    }
+
+    // TEST 26: Cross-user conversation access rejected -> 404 (safe IDOR protection)
+    {
+      const res = await request(server, {
+        method: 'GET',
+        path: `/api/ai/conversations/${autoConvoId}`,
+        headers: { Authorization: `Bearer ${userBToken}` } // User B trying to access User A's convo
+      });
+
+      if (res.status === 404 && res.body.success === false) {
+        console.log("✅ PASS [Test 26] Cross-user conversation read rejected -> 404 (IDOR protected)");
+        console.log(`       Message: ${res.body.message}`);
+        passedTests++;
+      } else {
+        console.error("❌ FAIL [Test 26] Expected 404 for cross-user conversation read:", res.body);
+      }
+    }
+
+    // TEST 27: Cross-user conversation delete rejected -> 404 (safe IDOR protection)
+    {
+      const res = await request(server, {
+        method: 'DELETE',
+        path: `/api/ai/conversations/${autoConvoId}`,
+        headers: { Authorization: `Bearer ${userBToken}` } // User B trying to delete User A's convo
+      });
+
+      if (res.status === 404 && res.body.success === false) {
+        console.log("✅ PASS [Test 27] Cross-user conversation delete rejected -> 404 (IDOR protected)");
+        passedTests++;
+      } else {
+        console.error("❌ FAIL [Test 27] Expected 404 for cross-user conversation delete:", res.body);
+      }
+    }
+
+    // TEST 28: Delete own conversation -> 200
+    {
+      const res = await request(server, {
+        method: 'DELETE',
+        path: `/api/ai/conversations/${testConvoAId}`,
+        headers: { Authorization: `Bearer ${userAToken}` }
+      });
+
+      if (res.status === 200 && res.body.success === true) {
+        console.log('✅ PASS [Test 28] Delete own conversation -> 200');
+        console.log(`       Deleted conversation: ${testConvoAId}`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 28] Failed to delete own conversation:', res.body);
+      }
+    }
+
+    // TEST 29: Deleted conversation cannot be retrieved -> 404
+    {
+      const res = await request(server, {
+        method: 'GET',
+        path: `/api/ai/conversations/${testConvoAId}`,
+        headers: { Authorization: `Bearer ${userAToken}` }
+      });
+
+      if (res.status === 404 && res.body.success === false) {
+        console.log('✅ PASS [Test 29] Deleted conversation cannot be retrieved -> 404');
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 29] Expected 404 for deleted conversation:', res.body);
+      }
+    }
+
+    // TEST 30: Invalid UUID rejected with 400
+    {
+      const res = await request(server, {
+        method: 'GET',
+        path: '/api/ai/conversations/not-a-valid-uuid',
+        headers: { Authorization: `Bearer ${userAToken}` }
+      });
+
+      if (res.status === 400 && res.body.success === false && res.body.message.includes('UUID')) {
+        console.log('✅ PASS [Test 30] Invalid conversation UUID rejected -> 400');
+        console.log(`       Message: ${res.body.message}`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 30] Expected 400 for invalid UUID:', res.body);
+      }
+    }
+
   } catch (err) {
     console.error('Unexpected test error:', err);
   } finally {

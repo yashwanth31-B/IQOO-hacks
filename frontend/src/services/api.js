@@ -110,7 +110,34 @@ class ApiClient {
   delete(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
+
+  // AI Conversation History Methods
+  createConversation(title = null) {
+    return this.post('/ai/conversations', { title });
+  }
+
+  getConversations(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.get(`/ai/conversations${query ? `?${query}` : ''}`);
+  }
+
+  getConversation(id) {
+    return this.get(`/ai/conversations/${id}`);
+  }
+
+  deleteConversation(id) {
+    return this.delete(`/ai/conversations/${id}`);
+  }
+
+  sendChatMessage(message, conversationId = null) {
+    const payload = { message };
+    if (conversationId) {
+      payload.conversationId = conversationId;
+    }
+    return this.post('/ai/chat', payload);
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);
 export default api;
+

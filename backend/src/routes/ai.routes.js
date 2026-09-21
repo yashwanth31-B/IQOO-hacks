@@ -10,4 +10,10 @@ router.use(requireAuth);
 // POST /api/ai/chat
 router.post('/chat', aiController.chat);
 
+// Persistent AI Conversation Endpoints
+router.post('/conversations', aiController.createConversation);
+router.get('/conversations', aiController.listConversations);
+router.get('/conversations/:id', aiController.getConversation);
+router.delete('/conversations/:id', aiController.deleteConversation);
+
 module.exports = router;
