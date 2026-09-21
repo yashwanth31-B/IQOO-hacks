@@ -1,0 +1,30 @@
+databases:
+  - name: ai-gaming-copilot-db
+    databaseName: ai_gaming_copilot
+    user: ai_gaming_user
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: ai-gaming-copilot-backend
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install && npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-gaming-copilot-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: AI_PROVIDER
+        value: development

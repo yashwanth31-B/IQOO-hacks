@@ -5,8 +5,14 @@ dotenv.config();
 
 const connectionString = process.env.DATABASE_URL;
 
+// Support SSL in production or when connecting to cloud databases (Render, Neon, Supabase, etc.)
+const shouldUseSSL =
+  process.env.NODE_ENV === 'production' ||
+  (connectionString && (connectionString.includes('render.com') || connectionString.includes('sslmode=require')));
+
 const pool = new Pool({
-  connectionString: connectionString || 'postgresql://postgres:postgres@localhost:5432/ai_gaming_copilot'
+  connectionString: connectionString || 'postgresql://postgres:postgres@localhost:5432/ai_gaming_copilot',
+  ssl: shouldUseSSL ? { rejectUnauthorized: false } : false
 });
 
 pool.on('error', (err) => {
