@@ -136,8 +136,8 @@ export const Dashboard = () => {
             {sessionStats.loading ? '…' : sessionStats.totalSessions}
           </div>
           <p className="metric-desc">Completed gaming sessions on record</p>
-          <Link to="/sessions" className="metric-link">
-            View all sessions →
+          <Link to="/memories" className="metric-link">
+            Second Brain archives →
           </Link>
         </div>
 
@@ -152,41 +152,82 @@ export const Dashboard = () => {
               : formatDuration(sessionStats.totalDurationSeconds)}
           </div>
           <p className="metric-desc">Tracked across all logged sessions</p>
-          <Link to="/sessions" className="metric-link">
-            Session history →
+          <Link to="/memories" className="metric-link">
+            Historical playtime →
           </Link>
         </div>
       </div>
 
-      {/* Feature Navigation Cards */}
+      {/* 4-Tier Architecture Navigation Grid */}
       <div className="dashboard-content-grid">
         <div className="panel-card">
           <div className="panel-header">
-            <h2 className="panel-title">🧠 Gaming Second Brain</h2>
-            <Link to="/memories" className="panel-header-link">Open →</Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>NOW</span>
+              <h2 className="panel-title">🎮 Cyber HUD</h2>
+            </div>
+            <Link to="/sessions" className="panel-header-link">Open →</Link>
           </div>
           <p className="panel-text">
-            Store tactical takeaways, cross-hair lineups, and clutch moments so you never lose
-            valuable gaming knowledge.
+            Live gaming cockpit: real-time telemetry, active match clock, live performance rating, and match controls.
           </p>
           <div className="panel-action-box">
-            <Link to="/memories" className="btn-secondary w-full text-center">
-              Explore Memories Repository
+            <Link to="/sessions" className="btn-secondary w-full text-center">
+              Launch Cyber HUD ("NOW")
             </Link>
           </div>
         </div>
 
         <div className="panel-card">
           <div className="panel-header">
-            <h2 className="panel-title">⚡ Productivity & Tasks</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc' }}>BEFORE</span>
+              <h2 className="panel-title">🧠 Gaming Second Brain</h2>
+            </div>
+            <Link to="/memories" className="panel-header-link">Open →</Link>
+          </div>
+          <p className="panel-text">
+            Accumulated knowledge: past match archives, peak performance records, 3 cognitive tiers, and tilt pattern analysis.
+          </p>
+          <div className="panel-action-box">
+            <Link to="/memories" className="btn-secondary w-full text-center">
+              Explore Second Brain ("BEFORE")
+            </Link>
+          </div>
+        </div>
+
+        <div className="panel-card">
+          <div className="panel-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>NOW+BEFORE</span>
+              <h2 className="panel-title">🤖 AI Copilot</h2>
+            </div>
+            <Link to="/copilot" className="panel-header-link">Open →</Link>
+          </div>
+          <p className="panel-text">
+            Contextual AI bridge: connects live HUD telemetry with historical Second Brain data for instant tactical answers.
+          </p>
+          <div className="panel-action-box">
+            <Link to="/copilot" className="btn-secondary w-full text-center">
+              Ask AI Copilot ("NOW + BEFORE")
+            </Link>
+          </div>
+        </div>
+
+        <div className="panel-card">
+          <div className="panel-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(52, 211, 153, 0.15)', color: '#34d399' }}>NEXT</span>
+              <h2 className="panel-title">⚡ Productivity</h2>
+            </div>
             <Link to="/tasks" className="panel-header-link">Open →</Link>
           </div>
           <p className="panel-text">
-            Transition smoothly from high-intensity gaming sessions into focused study or work sprints.
+            Post-game cooldown: priority tasks, focus mode sprints, and smooth transition from gaming into work/study.
           </p>
           <div className="panel-action-box">
             <Link to="/tasks" className="btn-secondary w-full text-center">
-              Manage Productivity Queue
+              Manage Productivity ("NEXT")
             </Link>
           </div>
         </div>

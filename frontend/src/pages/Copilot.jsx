@@ -1,16 +1,20 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { useSession } from '../hooks/useSession';
 
 const SUGGESTED_QUESTIONS = [
-  'When did I perform best?',
-  'What was my last session?',
-  'How much have I gamed?',
-  'What tasks are pending?'
+  'What am I doing right now?',
+  'When did I perform my best?',
+  'What was different about my best sessions?',
+  'How is my current session compared with my previous sessions?',
+  'What patterns do you see in my gaming?',
+  'What should I do after this session?'
 ];
 
 const ACTIVE_CONVO_STORAGE_KEY = 'copilot_active_conversation_id';
 
 export const Copilot = () => {
+  const { activeSession } = useSession();
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(() => {
     return localStorage.getItem(ACTIVE_CONVO_STORAGE_KEY) || null;
@@ -274,6 +278,36 @@ export const Copilot = () => {
             <span className="copilot-mode-dot"></span>
             <span>Second Brain Connected</span>
           </div>
+        </div>
+      </div>
+
+      {/* 4-Tier Architecture Context Bridge Bar ("NOW + BEFORE") */}
+      <div className="copilot-context-bridge-bar" style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '0.75rem',
+        padding: '0.7rem 1.1rem',
+        marginBottom: '1.25rem',
+        borderRadius: '8px',
+        background: 'linear-gradient(90deg, rgba(56, 189, 248, 0.05) 0%, rgba(139, 92, 246, 0.05) 50%, rgba(52, 211, 153, 0.05) 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        fontSize: '0.84rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ color: '#38bdf8', fontWeight: 700 }}>● NOW: Cyber HUD</span>
+          <span style={{ color: 'var(--text-secondary)' }}>
+            {activeSession ? `${activeSession.gameName || 'Active Match'} (Live)` : 'Cockpit Standby'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ color: '#a78bfa', fontWeight: 700 }}>🧠 BEFORE: Second Brain</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Historical Archives & Cognitive Vault</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ color: '#34d399', fontWeight: 700 }}>⚡ NEXT: Productivity</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Post-Match Focus Queue</span>
         </div>
       </div>
 

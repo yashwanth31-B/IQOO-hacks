@@ -167,11 +167,13 @@ export const Tasks = () => {
       <div className="page-header">
         <div>
           <div className="header-eyebrow">
-            <span className="logo-symbol">⚡</span> COGNITIVE FOCUS LAYER
+            <span className="logo-symbol">⚡</span>
+            <span className="badge-connected">POST-GAME COOLDOWN & FOCUS</span>
+            <span className="badge-mvp">TIER 4 · "NEXT"</span>
           </div>
           <h1 className="page-title">Productivity Tasks</h1>
           <p className="page-subtitle">
-            Transition smoothly from gaming duels into focused homework, study sprints, and routine mastery.
+            Next Actions & Focus Tasks: Transition smoothly from high-intensity gaming sessions into focused study or work sprints.
           </p>
         </div>
         <div className="page-actions">

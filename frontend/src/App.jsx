@@ -53,6 +53,7 @@ export function App() {
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/sessions" element={<Sessions />} />
+                <Route path="/hud" element={<Navigate to="/sessions" replace />} />
                 <Route path="/memories" element={<Memories />} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/copilot" element={<Copilot />} />

@@ -27,10 +27,10 @@ export const AppLayout = () => {
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { to: '/sessions', label: 'Gaming Sessions', icon: '🎮' },
-    { to: '/memories', label: 'Second Brain', icon: '🧠' },
-    { to: '/tasks', label: 'Productivity Tasks', icon: '⚡' },
-    { to: '/copilot', label: 'AI Copilot', icon: '🤖' },
+    { to: '/sessions', label: 'Cyber HUD', icon: '🎮', tag: 'NOW' },
+    { to: '/memories', label: 'Second Brain', icon: '🧠', tag: 'BEFORE' },
+    { to: '/copilot', label: 'AI Copilot', icon: '🤖', tag: 'NOW+BEFORE' },
+    { to: '/tasks', label: 'Productivity', icon: '⚡', tag: 'NEXT' },
   ];
 
   return (
@@ -93,7 +93,28 @@ export const AppLayout = () => {
               className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
+              <span className="nav-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <span>{item.label}</span>
+                {item.tag && (
+                  <span style={{
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: '4px',
+                    background: item.tag === 'NOW' ? 'rgba(56, 189, 248, 0.15)' :
+                                item.tag === 'BEFORE' ? 'rgba(168, 85, 247, 0.15)' :
+                                item.tag === 'NEXT' ? 'rgba(52, 211, 153, 0.15)' :
+                                'rgba(245, 158, 11, 0.15)',
+                    color: item.tag === 'NOW' ? '#38bdf8' :
+                           item.tag === 'BEFORE' ? '#c084fc' :
+                           item.tag === 'NEXT' ? '#34d399' :
+                           '#fbbf24'
+                  }}>
+                    {item.tag}
+                  </span>
+                )}
+              </span>
             </NavLink>
           ))}
           <a
@@ -103,10 +124,10 @@ export const AppLayout = () => {
             onClick={() => setMobileMenuOpen(false)}
             className="nav-link"
             style={{ color: '#38bdf8', border: '1px dashed rgba(56, 189, 248, 0.4)', marginTop: '0.4rem' }}
-            title="Open newly pulled Gaming Second Brain Cockpit HUD"
+            title="Open Python NLP match simulation cockpit"
           >
             <span className="nav-icon">🚀</span>
-            <span className="nav-label">Cyber HUD (8000) ↗</span>
+            <span className="nav-label">Simulator (8000) ↗</span>
           </a>
         </nav>
 

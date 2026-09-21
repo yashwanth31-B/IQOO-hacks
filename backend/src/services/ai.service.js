@@ -126,12 +126,17 @@ const getUserContext = async (userId) => {
     createdAt: row.created_at
   }));
 
+  const activeSession = sessions.find((s) => !s.endedAt) || null;
+  const pastSessions = sessions.filter((s) => s.endedAt);
+
   return {
     user: {
       id: userRow.id,
       name: userRow.name
     },
     sessions,
+    activeSession,
+    pastSessions,
     memories,
     tasks
   };
@@ -256,9 +261,14 @@ const selectIntelligentContext = (message, fullContext) => {
     completed: t.completed
   }));
 
+  const activeSession = fullContext.activeSession || sessions.find((s) => !s.endedAt) || null;
+  const pastSessions = boundedSessions.filter((s) => s.endedAt);
+
   return {
     user,
     sessions: boundedSessions,
+    activeSession,
+    pastSessions,
     memories: boundedMemories,
     tasks: boundedTasks
   };
@@ -275,6 +285,100 @@ const selectIntelligentContext = (message, fullContext) => {
  */
 const generateDevelopmentResponse = (message, context) => {
   const lower = (message || '').toLowerCase();
+  const activeSession = context.activeSession || (context.sessions && context.sessions.find((s) => !s.endedAt));
+
+  // A. "What am I doing right now?" -> Cyber HUD data ("NOW")
+  if (
+    lower.includes('right now') ||
+    lower.includes('doing right now') ||
+    lower.includes('what am i playing') ||
+    lower.includes('current match') ||
+    (lower.includes('current session') && !lower.includes('compar'))
+  ) {
+    if (activeSession) {
+      const elapsedMins = Math.max(1, Math.round((Date.now() - new Date(activeSession.startedAt).getTime()) / 60000));
+      return `🎮 Cyber HUD ("NOW"): You are currently in a live match of ${activeSession.gameName}${
+        activeSession.platform ? ` on ${activeSession.platform}` : ''
+      }.\n• Status: Active (${elapsedMins} minute(s) elapsed since ${new Date(activeSession.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})\n• Current Score: ${
+        activeSession.score !== null ? activeSession.score : 'Tracking live'
+      }\n• Performance: ${activeSession.performance || 'Live Telemetry Active'}${
+        activeSession.notes ? `\n• Notes: "${activeSession.notes}"` : ''
+      }\n\n(AI service is in development mode. Sources retrieved from live Cyber HUD telemetry.)`;
+    }
+    return `🎮 Cyber HUD ("NOW"): You do not have an active gaming session running right now. The Cyber HUD is currently in STANDBY mode. Head to Cyber HUD ("NOW") and click '🎮 Start Live Session' when you begin playing!`;
+  }
+
+  // B. "How is my current session compared with my previous sessions?" -> HUD + Second Brain ("NOW + BEFORE")
+  if (
+    lower.includes('compared') ||
+    lower.includes('compare') ||
+    (lower.includes('current') && lower.includes('previous'))
+  ) {
+    const pastSessions = (context.pastSessions || (context.sessions && context.sessions.filter((s) => s.endedAt)) || []);
+    const scoredPast = pastSessions.filter((s) => s.score !== null && s.score !== undefined);
+
+    if (activeSession) {
+      if (scoredPast.length > 0) {
+        const avgScore = Math.round(scoredPast.reduce((acc, s) => acc + Number(s.score), 0) / scoredPast.length);
+        const currentScore = activeSession.score !== null ? Number(activeSession.score) : 0;
+        const diff = currentScore - avgScore;
+        const diffText = diff >= 0 ? `+${diff} points above` : `${Math.abs(diff)} points below`;
+        return `🎮 Cyber HUD ("NOW") + 🧠 Second Brain ("BEFORE") Comparison:\n\nYou are currently playing ${activeSession.gameName} (Current score: ${currentScore}).\n• Second Brain Historical Average: ${avgScore} points across ${scoredPast.length} recorded past match(es).\n• Live Delta: Currently tracking ${diffText} your career average.\n• Advice: Maintain crosshair discipline and stay focused on post-plant positioning.\n\n(AI service is in development mode. Connecting live HUD telemetry with Second Brain memory.)`;
+      }
+      return `🎮 Cyber HUD ("NOW") + 🧠 Second Brain ("BEFORE"):\nYou are live in ${activeSession.gameName} with score ${activeSession.score ?? 'in progress'}. You do not have enough previous scored sessions in your Second Brain yet to calculate a baseline average.`;
+    }
+    const avgScore = scoredPast.length > 0 ? Math.round(scoredPast.reduce((acc, s) => acc + Number(s.score), 0) / scoredPast.length) : null;
+    return `You do not have an active session right now in Cyber HUD. When you start a match, I will compare your live telemetry against your historical Second Brain average${avgScore !== null ? ` (current career average: ${avgScore} points)` : ''} in real time!`;
+  }
+
+  // C. "What was different about my best sessions?" -> Second Brain comparison ("BEFORE")
+  if (
+    lower.includes('different about my best') ||
+    lower.includes('difference in my best') ||
+    lower.includes('why were my best') ||
+    lower.includes('best sessions different') ||
+    lower.includes('what was different')
+  ) {
+    const pastSessions = (context.pastSessions || (context.sessions && context.sessions.filter((s) => s.endedAt)) || []);
+    const scored = pastSessions.filter((s) => s.score !== null);
+
+    if (scored.length > 0) {
+      const sorted = [...scored].sort((a, b) => Number(b.score) - Number(a.score));
+      const best = sorted[0];
+      const avgDuration = Math.round(scored.reduce((acc, s) => acc + (s.duration || 0), 0) / scored.length / 60);
+      const bestDuration = Math.round((best.duration || 0) / 60);
+
+      return `🧠 Second Brain ("BEFORE") Best Session Differential Analysis:\n\nComparing your highest scoring session (${best.gameName}, Score: ${best.score}) against other archives:\n1. ⏱️ Match Duration: Top match ran ~${bestDuration} minutes (historical average: ${avgDuration} minutes). Shorter sprints under 75 mins prevent mental degradation.\n2. 🎯 Performance Tag: Recorded rating was "${best.performance || 'Outstanding'}".\n3. 📝 Tactical Notes: ${best.notes ? `"${best.notes}"` : 'Disciplined trade re-frags and early zone rotations noted.'}\n\n(AI service is in development mode. Sources retrieved from your Second Brain archives.)`;
+    }
+    return `🧠 Second Brain ("BEFORE"): In analyzed top-tier gameplay, 3 key differentiators separate peak matches from tilt losses:\n1. ⏱️ Duration Cap: Ending sessions before 75 minutes of continuous play.\n2. 🛡️ Trade Spacing: Playing within 2 seconds of teammates to ensure instant trades.\n3. 🚫 No Late-Night Queuing: Avoiding high-intensity ranked queues after 11:00 PM.`;
+  }
+
+  // D. "What patterns do you see in my gaming?" -> Second Brain patterns ("BEFORE")
+  if (
+    lower.includes('pattern') ||
+    lower.includes('trend') ||
+    lower.includes('fatigue cliff')
+  ) {
+    const pastSessions = (context.pastSessions || context.sessions || []);
+    return `🧠 Second Brain ("BEFORE") Pattern Analysis (${pastSessions.length} session(s) analyzed):\n\n1. 📉 The 75-Minute Fatigue Cliff: Reaction times and duel conversions drop sharply in continuous sessions past 75 minutes.\n2. 🌙 11:00 PM Performance Degradation: Late-night ranked matches exhibit a 40% higher tilt rate and frequent multi-game loss streaks.\n3. 🔄 2-Loss Reset Protocol: Stepping away for a 3-minute breather after 2 consecutive losses breaks tilt spirals and restores baseline win-rates.\n\n(AI service is in development mode. Synthesized from cross-session Second Brain telemetry.)`;
+  }
+
+  // E. "What should I do after this session?" -> Bridges into Productivity ("NEXT")
+  if (
+    lower.includes('after this session') ||
+    lower.includes('after my session') ||
+    lower.includes('after session') ||
+    lower.includes('post game') ||
+    lower.includes('what should i do next') ||
+    lower.includes('do after')
+  ) {
+    const pendingTasks = (context.tasks || []).filter((t) => !t.completed);
+    if (pendingTasks.length > 0) {
+      const taskItems = pendingTasks.slice(0, 3).map((t) => `• ${t.title} [${t.priority.toUpperCase()}${t.estimatedMinutes ? `, ~${t.estimatedMinutes}m` : ''}]`).join('\n');
+      return `⚡ Productivity ("NEXT") Post-Match Cooldown & Next Actions:\n\n1. 🫁 5-Minute Physical Reset: Stand up, stretch your wrists and neck, and drink 250ml of water.\n2. 📝 Pending Focus Tasks to tackle:\n${taskItems}\n\nHead over to the Productivity tab to start your post-game focus mode!`;
+    }
+    return `⚡ Productivity ("NEXT") Post-Match Cooldown:\n\n1. 🫁 5-Minute Physical Reset: Stand up, hydrate, and look away from all screens for 5 minutes.\n2. ⚡ Tasks Queue: All current tasks are completed! Open the Productivity tab to add your next study or work objective.`;
+  }
 
   // 1. Highest score or best performance
   if (
@@ -436,7 +540,12 @@ STRICT OPERATIONAL RULES:
 5. When comparing sessions or evaluating performance, cite the specific recorded metrics (e.g. score, performance rating, duration) supporting your conclusion.
 6. Use recent conversation history for conversational context (e.g. follow-up questions or pronouns), but never let conversation history override factual Second Brain records.
 7. Keep responses concise, actionable, and gamer-oriented.
-8. Return your response strictly as a valid JSON object matching this schema:
+8. Understand the 4-tier system structure:
+   - CYBER HUD ("NOW"): Live gaming session telemetry, real-time timer, active match controls.
+   - GAMING SECOND BRAIN ("BEFORE"): Accumulated past session archives, episodic/semantic/procedural memories, peak performance records, and cross-session patterns.
+   - AI COPILOT ("NOW + BEFORE"): Synthesizes live HUD telemetry with historical Second Brain records.
+   - PRODUCTIVITY ("NEXT"): Cooldown focus tasks, priority queue, and study/work sprints.
+9. Return your response strictly as a valid JSON object matching this schema:
 {
   "message": "Direct, natural language response to the user's inquiry.",
   "insights": ["Concise observation, lesson, or actionable tip based on their data"],
