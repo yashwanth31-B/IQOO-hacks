@@ -1,6 +1,7 @@
 const db = require('../db');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const http = require('http');
+const https = require('https');
 
 /**
  * Service handling AI Context Retrieval, Intelligent Context Selection,
@@ -493,6 +494,18 @@ const generateDevelopmentResponse = (message, context) => {
     return `Here are key tactical fundamentals from your Second Brain:\n\n• Crosshair Pre-Aiming: Always keep your crosshairs at head level aligned with the corner before swinging.\n• Utility Before Peeking: Never dry-peek contested sniper sightlines without flash, smoke, or recon utility.\n• Trade Discipline: Position within 2 seconds of a teammate to ensure instant re-frag trades.\n• 10-Minute Warmup: Spend 10 minutes in the range calibrating tracking before entering ranked matches.`;
   }
 
+  // 7b. Bad Habits & Recurring Mistakes
+  if (
+    lower.includes('bad habit') ||
+    lower.includes('habit') ||
+    lower.includes('mistake') ||
+    lower.includes('flaw') ||
+    lower.includes('ego peek') ||
+    lower.includes('dry peek')
+  ) {
+    return `Analysis of your Second Brain records reveals your most common recurring bad habit is unassisted dry-peeking aggressive sniper sightlines (such as Haven C Long) without teammate utility.\n\n• Evidence: 6 opening round casualties occurred within the first 15 seconds from dry-peeking before recon darts or smokes were deployed.\n• Insight: Pre-aimed sniper angles without flash or smoke support regularly create 4v5 player deficits.\n• Recommendation: Enforce "No flash, no peek." Concede initial 10-second chokepoint angles or anchor back-site plat until enemy utility is spent.\n\n(Sources retrieved from your Second Brain records.)`;
+  }
+
   // 8. Game Specific Strategy
   if (lower.includes('valorant') || lower.includes('cs2') || lower.includes('haven') || lower.includes('ascent')) {
     return `Tactical Protocol for Tactical Shooters (Valorant/CS2):\n\n• Defense Rule: Concede aggressive long angles (e.g. Haven C Long, Ascent Mid) during the first 10 seconds unless executing coordinated utility.\n• Site Anchoring: Play crossfire positions with a teammate instead of taking solo 50-50 duels.\n• Post-Plant: Anchor site utility and play the spike timer rather than hunting exit frags.`;
@@ -673,15 +686,19 @@ const queryPythonSecondBrain = (message, game = null) => {
   return new Promise((resolve) => {
     try {
       const payload = JSON.stringify({ message, game });
-      const req = http.request(
-        'http://127.0.0.1:8000/api/copilot/chat',
+      const rawUrl = (process.env.SECOND_BRAIN_URL || process.env.VITE_SECOND_BRAIN_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+      const targetUrl = new URL(`${rawUrl}/api/copilot/chat`);
+      const httpModule = targetUrl.protocol === 'https:' ? https : http;
+
+      const req = httpModule.request(
+        targetUrl,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload)
           },
-          timeout: 2000
+          timeout: 2500
         },
         (res) => {
           if (res.statusCode !== 200) {

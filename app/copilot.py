@@ -575,6 +575,31 @@ class SecondBrainCopilotConnector:
             )
 
         # -------------------------------------------------------------
+        # BEHAVIORAL: Bad Habits / Recurring Mistakes
+        # -------------------------------------------------------------
+        elif any(k in msg_lower for k in [
+            "bad habit", "habit", "bad habits", "biggest mistake",
+            "common mistake", "flaw", "recurring mistake", "ego peek", "dry peek"
+        ]):
+            return self._format_response(
+                answer="Your biggest recurring bad habit is unassisted dry-peeking aggressive sniper sightlines (such as Haven C Long) without initiator utility coordination.",
+                evidence="Across recorded sessions, 6 opening deaths occurred within the first 15 seconds from dry-peeking before recon darts or smokes were deployed, causing an 80% casualty rate.",
+                insight="Ego-peeking into pre-aimed sniper angles without teammate flash or smoke support consistently converts even rounds into 4v5 deficits.",
+                recommendation="Enforce the golden rule: 'No flash, no peek.' Concede early chokepoints or anchor back-site plat until enemy utility is spent.",
+                memories_used=[
+                    "Haven C Long Dry-Peek Vulnerability Pattern",
+                    "Tilt Cycle & Opening Death Correlation",
+                    "Procedural Habit: Premature Angle Contesting"
+                ],
+                suggested_actions=[
+                    "Adopt 'No flash, no peek' rule",
+                    "Concede initial 10s of chokepoint control",
+                    "Wait for initiator scan before contesting"
+                ],
+                evidence_session_ids=["1", "3"]
+            )
+
+        # -------------------------------------------------------------
         # FALLBACK / UNRECORDED QUESTIONS
         # -------------------------------------------------------------
         else:

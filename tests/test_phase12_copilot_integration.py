@@ -252,6 +252,15 @@ class TestPhase12CopilotIntegration(unittest.TestCase):
         self.assertIn("ANSWER:", r_cfg["reply"])
         self.assertIn("Phantom", r_cfg["reply"])
 
+        # What is my biggest bad habit / recurring mistake?
+        r_habit = self.connector.handle_query("What is my biggest bad habit?")
+        self.assertIn("ANSWER:", r_habit["reply"])
+        self.assertIn("dry-peek", r_habit["reply"].lower())
+        self.assertIn("EVIDENCE:", r_habit["reply"])
+        self.assertIn("INSIGHT:", r_habit["reply"])
+        self.assertIn("RECOMMENDATION:", r_habit["reply"])
+        self.assertTrue(len(r_habit["evidence_session_ids"]) >= 1)
+
     # -----------------------------------------------------------------
     # 8. FASTAPI ENDPOINT: POST /api/copilot/chat
     # -----------------------------------------------------------------
