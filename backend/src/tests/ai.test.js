@@ -68,7 +68,7 @@ async function runAiTests() {
   let taskAId, taskBId;
 
   let passedTests = 0;
-  const totalTests = 30;
+  const totalTests = 31;
 
   try {
     // 1. Setup User A
@@ -836,6 +836,23 @@ async function runAiTests() {
         passedTests++;
       } else {
         console.error('❌ FAIL [Test 30] Expected 400 for invalid UUID:', res.body);
+      }
+    }
+
+    // TEST 31: Python FastAPI Second Brain status check
+    {
+      const res = await request(server, {
+        method: 'GET',
+        path: '/api/ai/second-brain/status',
+        headers: { Authorization: `Bearer ${userAToken}` }
+      });
+
+      if (res.status === 200 && res.body.success === true && res.body.data && res.body.data.url) {
+        console.log('✅ PASS [Test 31] Python FastAPI Second Brain status check -> 200');
+        console.log(`       URL: ${res.body.data.url}, Online: ${res.body.data.online}`);
+        passedTests++;
+      } else {
+        console.error('❌ FAIL [Test 31] Expected successful status response:', res.body);
       }
     }
 

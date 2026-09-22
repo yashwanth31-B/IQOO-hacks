@@ -188,10 +188,27 @@ const deleteConversation = async (req, res, next) => {
   }
 };
 
+/**
+ * Check health & status of the deployed Python FastAPI Second Brain service
+ * GET /api/ai/second-brain/status
+ */
+const getSecondBrainStatus = async (req, res, next) => {
+  try {
+    const status = await aiService.checkSecondBrainHealth();
+    return res.status(200).json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   chat,
   createConversation,
   listConversations,
   getConversation,
-  deleteConversation
+  deleteConversation,
+  getSecondBrainStatus
 };

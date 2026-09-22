@@ -16,4 +16,7 @@ router.get('/conversations', aiController.listConversations);
 router.get('/conversations/:id', aiController.getConversation);
 router.delete('/conversations/:id', aiController.deleteConversation);
 
+// Python FastAPI Second Brain Health & Status
+router.get('/second-brain/status', aiController.getSecondBrainStatus);
+
 module.exports = router;

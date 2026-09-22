@@ -27,3 +27,19 @@ services:
         value: 7d
       - key: AI_PROVIDER
         value: development
+      - key: SECOND_BRAIN_URL
+        value: https://ai-gaming-second.onrender.com
+
+  - type: web
+    name: ai-gaming-second-brain
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ALLOWED_ORIGINS
+        value: https://ai-gaming-copilot.vercel.app

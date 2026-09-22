@@ -689,6 +689,7 @@ const queryPythonSecondBrain = (message, game = null) => {
       const rawUrl = (process.env.SECOND_BRAIN_URL || process.env.VITE_SECOND_BRAIN_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
       const targetUrl = new URL(`${rawUrl}/api/copilot/chat`);
       const httpModule = targetUrl.protocol === 'https:' ? https : http;
+      const timeout = Number(process.env.SECOND_BRAIN_TIMEOUT_MS) || (targetUrl.protocol === 'https:' ? 12000 : 3000);
 
       const req = httpModule.request(
         targetUrl,
@@ -698,7 +699,7 @@ const queryPythonSecondBrain = (message, game = null) => {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload)
           },
-          timeout: 2500
+          timeout
         },
         (res) => {
           if (res.statusCode !== 200) {
@@ -740,6 +741,81 @@ const queryPythonSecondBrain = (message, game = null) => {
       req.end();
     } catch {
       resolve(null);
+    }
+  });
+};
+
+/**
+ * Check connectivity and status of the Python FastAPI Second Brain service
+ * @returns {Promise<{ online: boolean, status?: string, service?: string, url: string, latencyMs?: number, error?: string }>}
+ */
+const checkSecondBrainHealth = () => {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    try {
+      const rawUrl = (process.env.SECOND_BRAIN_URL || process.env.VITE_SECOND_BRAIN_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+      const targetUrl = new URL(`${rawUrl}/health`);
+      const httpModule = targetUrl.protocol === 'https:' ? https : http;
+      const timeout = Number(process.env.SECOND_BRAIN_TIMEOUT_MS) || (targetUrl.protocol === 'https:' ? 12000 : 3000);
+
+      const req = httpModule.request(
+        targetUrl,
+        {
+          method: 'GET',
+          timeout
+        },
+        (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            const latencyMs = Date.now() - startTime;
+            try {
+              const parsed = JSON.parse(data);
+              resolve({
+                online: res.statusCode === 200,
+                statusCode: res.statusCode,
+                status: parsed.status || (res.statusCode === 200 ? 'healthy' : 'degraded'),
+                service: parsed.service || 'gaming-second-brain',
+                version: parsed.version,
+                url: rawUrl,
+                latencyMs
+              });
+            } catch {
+              resolve({
+                online: res.statusCode === 200,
+                statusCode: res.statusCode,
+                status: res.statusCode === 200 ? 'healthy' : 'error',
+                url: rawUrl,
+                latencyMs
+              });
+            }
+          });
+        }
+      );
+      req.on('error', (err) => {
+        resolve({
+          online: false,
+          error: err.message,
+          url: rawUrl,
+          latencyMs: Date.now() - startTime
+        });
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({
+          online: false,
+          error: 'Connection timed out',
+          url: rawUrl,
+          latencyMs: Date.now() - startTime
+        });
+      });
+      req.end();
+    } catch (err) {
+      resolve({
+        online: false,
+        error: err.message,
+        url: (process.env.SECOND_BRAIN_URL || process.env.VITE_SECOND_BRAIN_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
+      });
     }
   });
 };
@@ -829,8 +905,10 @@ const generateResponse = async (message, context, history = []) => {
     };
   }
 
+  const detectedGame = intelligentContext.activeSession?.gameName || (intelligentContext.sessions && intelligentContext.sessions[0]?.gameName) || null;
+
   // 4. Check if Python Second Brain engine is online for tactical queries
-  const pythonReply = await queryPythonSecondBrain(message);
+  const pythonReply = await queryPythonSecondBrain(message, detectedGame);
   if (pythonReply) {
     return {
       message: pythonReply.message,
@@ -911,6 +989,8 @@ module.exports = {
   generateGeminiCompletion,
   buildSources,
   generateResponse,
-  processChat
+  processChat,
+  queryPythonSecondBrain,
+  checkSecondBrainHealth
 };
 
